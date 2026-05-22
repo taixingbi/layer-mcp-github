@@ -64,4 +64,3 @@ docker compose up --build
 | Empty HTTP body | Use `/mcp` not `/mcp/` |
 | No `answer` | Set `LLM_GATEWAY_BASE_URL` in `.env`; restart server |
 | Slow | Default hits 9 repos; add `"repo"` to narrow |
-# layer-mcp-github
