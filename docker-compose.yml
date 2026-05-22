@@ -1,12 +1,12 @@
 # MCP streamable-http. Pass secrets via env_file (never bake .env into the image).
 services:
-  layer-mcp-github:
-    image: layer-mcp-github
+  mcp-github:
+    image: layer-mcp-github-v1
     build: .
-    container_name: layer-mcp-github
+    container_name: layer-mcp-github-v1
     restart: unless-stopped
     labels:
-      com.layer.service: layer-mcp-github
+      com.layer.service: layer-mcp-github-v1
     ports:
       - "8000:8000"
     env_file:

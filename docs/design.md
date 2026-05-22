@@ -1,4 +1,4 @@
-# layer-mcp-github — design
+# layer-mcp-github-v1 — design
 
 ## Purpose
 

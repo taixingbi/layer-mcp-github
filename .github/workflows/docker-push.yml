@@ -4,7 +4,7 @@
 #   DOCKERHUB_USERNAME — Docker Hub username or org
 #   DOCKERHUB_TOKEN    — Access token (recommended)
 #
-# Images: <username>/layer-mcp-github:latest and <username>/layer-mcp-github:<git-sha>
+# Images: <username>/layer-mcp-github-v1:latest and <username>/layer-mcp-github-v1:<git-sha>
 name: Push to Docker Hub
 
 on:
@@ -41,7 +41,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/layer-mcp-github:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/layer-mcp-github:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/layer-mcp-github-v1:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/layer-mcp-github-v1:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

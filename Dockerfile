@@ -1,4 +1,4 @@
-# layer-mcp-github: MCP streamable-http on port 8000.
+# layer-mcp-github-v1: MCP streamable-http on port 8000.
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \

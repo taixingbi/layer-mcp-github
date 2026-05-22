@@ -1,6 +1,7 @@
 """Allowlisted GitHub repo short names (under GITHUB_OWNER)."""
 
 ALLOWED_REPOS: tuple[str, ...] = (
+    "layer-mcp-github-v1",
     "layer-web-v1",
     "layer-gateway-api-v1",
     "layer-orchestrator-v1",

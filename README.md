@@ -1,6 +1,6 @@
 # layer-mcp-github
 
-MCP server that answers natural-language questions about a **fixed set of GitHub repos**. It pulls README + code search from GitHub, synthesizes an answer through your **LLM gateway** (`POST /v1/chat/completions`), and returns RAG-style JSON with numbered citations and GitHub URLs.
+MCP server (**[layer-mcp-github-v1](https://github.com/taixingbi/layer-mcp-github-v1)**) that answers natural-language questions about a **fixed set of GitHub repos**. It pulls README + code search from GitHub, synthesizes an answer through your **LLM gateway** (`POST /v1/chat/completions`), and returns RAG-style JSON with numbered citations and GitHub URLs.
 
 | Docs | Contents |
 |------|----------|
@@ -14,7 +14,7 @@ MCP server that answers natural-language questions about a **fixed set of GitHub
 ## Setup
 
 ```bash
-cd layer-mcp-github
+cd layer-mcp-github-v1
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
@@ -31,7 +31,7 @@ Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: 
 
 Edit `ALLOWED_REPOS` in [`app/repo_allowlist.py`](app/repo_allowlist.py) and restart the server.
 
-Today: **9** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
+Today: **10** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 
 ## MCP tool: `ask_repo`
 
@@ -81,7 +81,7 @@ app/
 
 ## Cursor
 
-Enable MCP server **layer-github**. Examples:
+Enable MCP server **layer-mcp-github-v1** (see [`.cursor/mcp.json`](.cursor/mcp.json)). Examples:
 
 - `Use ask_repo: What is the whole project design?`
 - `Use ask_repo with stream true on layer-orchestrator-v1: how does routing work?`
@@ -89,10 +89,12 @@ Enable MCP server **layer-github**. Examples:
 ## Docker
 
 ```bash
-docker run -p 8000:8000 --env-file .env YOUR_DOCKERHUB_USER/layer-mcp-github:latest
+docker compose up --build
+# or
+docker run -p 8000:8000 --env-file .env YOUR_DOCKERHUB_USER/layer-mcp-github-v1:latest
 ```
 
-Runs `python -m app.main --http` (MCP on port **8000**).
+Runs `python -m app.main --http` (MCP on port **8000**). Image tags match [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1) (`layer-mcp-github-v1:latest` on Docker Hub after CI push to `main`).
 
 ## Troubleshooting
 

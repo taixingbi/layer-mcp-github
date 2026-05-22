@@ -1,6 +1,6 @@
 # Log JSON schema (design)
 
-Structured logs for **layer-mcp-github** are emitted by the stdlib logger `layer_mcp.github`, configured in [`app/logging_config.py`](../app/logging_config.py). This document describes the **on-the-wire JSON** shape (one UTF-8 JSON object per line), aligned with [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1/blob/main/docs/log-json-schema.md).
+Structured logs for **layer-mcp-github-v1** are emitted by the stdlib logger `layer_mcp.github`, configured in [`app/logging_config.py`](../app/logging_config.py). This document describes the **on-the-wire JSON** shape (one UTF-8 JSON object per line), aligned with [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1/blob/main/docs/log-json-schema.md).
 
 ## Goals
 

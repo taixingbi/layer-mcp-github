@@ -1,4 +1,4 @@
-# Smoke test — layer-mcp-github
+# Smoke test — layer-mcp-github-v1
 
 Run from project root with venv active. Requires `.env` with `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`.
 
