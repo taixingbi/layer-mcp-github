@@ -22,7 +22,12 @@ __all__ = [
 
 
 def _run_server() -> None:
+    """Start stdio MCP or HTTP MCP server after configuring stderr JSON logging."""
     import sys
+
+    from app.logging_config import setup_logging
+
+    setup_logging()
 
     if "--http" in sys.argv:
         llm = llm_gateway_base() or "(not set — ask_repo will fail)"

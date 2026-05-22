@@ -34,12 +34,17 @@ GitHub     LLM gateway
 | `mcp_server.py` | FastMCP |
 | `tools.py` | `ask_repo`, `ask_repo_stream` |
 | `pipeline.py` | Buffered `ask_repo_impl` |
-| `streaming.py` | Shared SSE event pipeline |
+| `ask_common.py` | Shared validation, logging, buffered LLM |
+| `sse.py` | SSE format/parse/remap |
+| `streaming.py` | SSE event generator + MCP stream consumer |
 | `repo_allowlist.py` | `ALLOWED_REPOS` |
 | `allowlist.py` | `resolve_repos` |
 | `github_client.py` | README + code search |
 | `llm.py` | Gateway |
 | `correlation.py` | Ids + optional `X-User-*` on `/mcp` |
+| `logging_config.py` | stderr JSON logger `layer_mcp.github` |
+| `request_context.py` | contextvars for log correlation |
+| `log_context.py` | bind context + latency `extra` helpers |
 | `citations.py` | `[n]` sources |
 
 ## Streaming
@@ -50,9 +55,13 @@ GitHub     LLM gateway
 | HTTP `/mcp` + SSE Accept + `stream: true` | `meta`, `delta`, `done` events |
 | HTTP `/mcp` buffered | JSON-RPC `structuredContent` |
 
+## Observability
+
+Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.md](log-json-schema.md). Key lines: `ask_repo start`, `ask_repo done`, `ask_repo stream *`, `mcp tools/call sse start`, `http request done`. Set `LOG_LEVEL=DEBUG` for more detail.
+
 ## Configuration
 
-`GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL` required. `HTTP_HOST` / `HTTP_PORT` for `--http`.
+`GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL` required. `HTTP_HOST` / `HTTP_PORT` for `--http`. Optional: `LOG_LEVEL`, `LOG_TZ`.
 
 ## Design choices
 

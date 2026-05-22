@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from app.config import HTTP_HOST, HTTP_PORT
+from app.logging_config import logger
 from app.mcp_http import (
     accepts_event_stream,
     delegate_to_streamable_mcp,
@@ -20,9 +21,27 @@ from app.mcp_http import (
     replay_request,
 )
 from app.mcp_server import mcp
+from app.request_context import bind_http_context
+
+
+class HttpLoggingMiddleware(BaseHTTPMiddleware):
+    """Bind HTTP method/path for JSON logs and emit one line per request."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.url.path.rstrip("/") or "/"
+        with bind_http_context(request.method, path):
+            response = await call_next(request)
+            status = str(response.status_code)
+            with bind_http_context(request.method, path, status=status):
+                logger.info(
+                    f"http request done status={status}",
+                    extra={"status": status},
+                )
+            return response
 
 
 def _ensure_session_manager() -> None:
+    """Initialize FastMCP streamable HTTP session manager (idempotent)."""
     mcp.streamable_http_app()
 
 
@@ -60,6 +79,7 @@ class McpStreamMiddleware(BaseHTTPMiddleware):
 
 
 async def mcp_endpoint(request: Request) -> Response:
+    """Starlette route: delegate GET/POST/DELETE /mcp to FastMCP streamable HTTP ASGI app."""
     from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 
     _ensure_session_manager()
@@ -68,6 +88,7 @@ async def mcp_endpoint(request: Request) -> Response:
 
 
 def create_mcp_app() -> Starlette:
+    """Build Starlette app with MCP routes and SSE/logging middleware."""
     import app.tools  # noqa: F401
 
     _ensure_session_manager()
@@ -83,13 +104,21 @@ def create_mcp_app() -> Starlette:
 
     app = Starlette(debug=False, routes=routes, lifespan=lifespan)
     app.add_middleware(McpStreamMiddleware)
+    app.add_middleware(HttpLoggingMiddleware)
     return app
 
 
 async def run_mcp_http_server() -> None:
+    """Run uvicorn with MCP HTTP app (no access log; stderr JSON only)."""
     import uvicorn
 
     app = create_mcp_app()
-    config = uvicorn.Config(app, host=HTTP_HOST, port=HTTP_PORT, log_level="info")
+    config = uvicorn.Config(
+        app,
+        host=HTTP_HOST,
+        port=HTTP_PORT,
+        log_level="warning",
+        access_log=False,
+    )
     server = uvicorn.Server(config)
     await server.serve()

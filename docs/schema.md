@@ -66,4 +66,5 @@ Optional headers: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Id`, `X-
 
 - [smoke-test.md](smoke-test.md)
 - [design.md](design.md)
+- [log-json-schema.md](log-json-schema.md)
 - [README.md](../README.md)

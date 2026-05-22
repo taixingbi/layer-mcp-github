@@ -7,21 +7,28 @@ from typing import Any
 
 import httpx
 
-from app.allowlist import fail, resolve_repos
+from app.ask_common import (
+    error_payload,
+    httpx_error_message,
+    log_ask_done,
+    log_ask_exception,
+    log_ask_fail,
+    log_ask_github_done,
+    log_ask_start,
+    resolve_ask_scope,
+    run_buffered_llm,
+    service_prereq_error,
+)
 from app.citations import (
     build_citations,
     format_multi_repo_sources,
     format_sources_for_llm,
     merge_citations,
 )
-from app.config import (
-    CODE_HITS_MAX,
-    MULTI_REPO_CODE_HITS_MAX,
-    SYSTEM_PROMPT,
-)
-from app.github_client import fetch_code_hits_multi, fetch_readme, github_token
+from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
 from app.correlation import UserContext, resolve_correlation
-from app.llm import chat_completion, generate_follow_ups, llm_gateway_base
+from app.github_client import fetch_code_hits_multi, fetch_readme
+from app.log_context import bind_ask_context
 
 
 def gather_github_evidence(
@@ -30,6 +37,7 @@ def gather_github_evidence(
     question: str,
     multi: bool,
 ) -> tuple[list[dict[str, Any]], str, dict[str, int]]:
+    """Fetch READMEs and code search hits; build citations and LLM user message body."""
     latency: dict[str, int] = {}
     scope_label = ", ".join(full_names)
 
@@ -90,10 +98,11 @@ def finish_ask_repo_result(
     follow_usage: dict[str, int],
     rid: str,
     sid: str,
-    tid: str,
+    tid: str | None,
     conv: str,
     t0: float,
 ) -> dict[str, Any]:
+    """Assemble the RAG-style JSON payload returned by ask_repo tools."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
     usage_out: dict[str, Any] = {"chat": chat_usage}
     if follow_usage.get("total_tokens"):
@@ -130,24 +139,12 @@ def ask_repo_impl(
     trace_id: str | None = None,
     conversation_id_arg: str | None = None,
     user: UserContext | None = None,
+    http_method: str = "-",
+    http_path: str = "-",
+    stream: bool = False,
+    tool_name: str = "ask_repo",
 ) -> dict[str, Any]:
-    resolved = resolve_repos(repo)
-    if not resolved.get("ok"):
-        return resolved
-
-    if not github_token():
-        return fail("GITHUB_TOKEN not set in .env", repo=repo or "")
-
-    full_names: list[str] = resolved["full_names"]
-    scope = resolved["scope"]
-    multi = len(full_names) > 1
-
-    if not llm_gateway_base():
-        return fail(
-            "LLM_GATEWAY_BASE_URL not set in .env (required to synthesize answers)",
-            repo=repo or "",
-        )
-
+    """Buffered ask_repo: GitHub retrieval, gateway chat, follow-ups (sync, for MCP thread pool)."""
     rid, sid, tid, conv = resolve_correlation(
         request_id=request_id,
         session_id=session_id,
@@ -155,66 +152,83 @@ def ask_repo_impl(
         conversation_id=conversation_id_arg,
     )
 
-    t0 = time.perf_counter()
-    latency: dict[str, int] = {}
-    chat_usage: dict[str, int] = {}
-    follow_usage: dict[str, int] = {}
-    scope_label = ", ".join(full_names)
+    def _fail(msg: str, **extra: Any) -> dict[str, Any]:
+        log_ask_fail(msg, tool_name=tool_name, stream=stream, **extra)
+        return error_payload(msg, repo, request_id=rid, session_id=sid, trace_id=tid, conversation_id=conv)
 
-    try:
-        with httpx.Client(timeout=httpx.Timeout(30.0, read=120.0)) as client:
-            citations, user_body, gh_latency = gather_github_evidence(
-                client, full_names, question, multi
+    with bind_ask_context(
+        request_id=rid,
+        session_id=sid,
+        trace_id=tid,
+        conversation_id=conv,
+        user=user,
+        method=http_method,
+        path=http_path,
+    ):
+        scope, err = resolve_ask_scope(repo)
+        if err is not None:
+            return _fail(err.get("error", "resolve failed"))
+
+        prereq = service_prereq_error()
+        if prereq:
+            return _fail(prereq)
+
+        assert scope is not None
+        log_ask_start(scope, tool_name=tool_name, stream=stream, user=user)
+        t0 = time.perf_counter()
+        latency: dict[str, int] = {}
+
+        try:
+            with httpx.Client(timeout=httpx.Timeout(30.0, read=120.0)) as client:
+                citations, user_body, gh_latency = gather_github_evidence(
+                    client, scope.full_names, question, scope.multi
+                )
+                latency.update(gh_latency)
+                log_ask_github_done(len(citations), gh_latency, stream=stream)
+
+                answer, follow_ups, llm_latency, chat_usage, follow_usage = run_buffered_llm(
+                    client,
+                    question=question,
+                    user_body=user_body,
+                    scope_label=scope.scope_label,
+                    conversation_id=conv,
+                    request_id=rid,
+                    session_id=sid,
+                    trace_id=tid,
+                    user=user,
+                )
+                latency.update(llm_latency)
+
+        except (httpx.HTTPError, ValueError) as e:
+            log_ask_exception(e, stream=stream)
+            extra = (
+                {"upstream_status": e.response.status_code}
+                if isinstance(e, httpx.HTTPStatusError)
+                else {}
             )
-            latency.update(gh_latency)
+            return _fail(httpx_error_message(e), **extra)
 
-            t_llm = time.perf_counter()
-            answer, chat_usage = chat_completion(
-                client,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_body},
-                ],
-                conversation_id=conv,
-                request_id=rid,
-                session_id=sid,
-                trace_id=tid,
-                user=user,
-            )
-            latency["chat"] = int((time.perf_counter() - t_llm) * 1000)
-
-            t_llm = time.perf_counter()
-            follow_ups, follow_usage = generate_follow_ups(
-                client,
-                question,
-                answer,
-                scope_label,
-                conversation_id=conv,
-                request_id=rid,
-                session_id=sid,
-                trace_id=tid,
-                user=user,
-            )
-            latency["follow_up_chat"] = int((time.perf_counter() - t_llm) * 1000)
-
-    except httpx.HTTPStatusError as e:
-        return fail(f"GitHub API error: {e.response.status_code}", repo=repo or "")
-    except httpx.HTTPError as e:
-        return fail(f"Request failed: {e}", repo=repo or "")
-    except ValueError as e:
-        return fail(str(e), repo=repo or "")
-
-    return finish_ask_repo_result(
-        full_names=full_names,
-        citations=citations,
-        answer=answer,
-        follow_ups=follow_ups,
-        latency=latency,
-        chat_usage=chat_usage,
-        follow_usage=follow_usage,
-        rid=rid,
-        sid=sid,
-        tid=tid,
-        conv=conv,
-        t0=t0,
-    )
+        result = finish_ask_repo_result(
+            full_names=scope.full_names,
+            citations=citations,
+            answer=answer,
+            follow_ups=follow_ups,
+            latency=latency,
+            chat_usage=chat_usage,
+            follow_usage=follow_usage,
+            rid=rid,
+            sid=sid,
+            tid=tid,
+            conv=conv,
+            t0=t0,
+        )
+        log_ask_done(
+            scope,
+            tool_name=tool_name,
+            stream=stream,
+            user=user,
+            citation_count=len(citations),
+            follow_up_count=len(follow_ups),
+            latency_ms=result["latency_ms"],
+        )
+        return result

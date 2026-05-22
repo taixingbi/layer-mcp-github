@@ -49,7 +49,7 @@ Use `/mcp` not `/mcp/`.
 curl -s --max-time 120 -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"What is this repo for? One sentence.","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
+  -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"introduce this huntAi project","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
   http://127.0.0.1:8000/mcp | jq '.result.structuredContent | {ok, answer, citations}'
 ```
 
@@ -76,7 +76,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
       "name":"ask_repo",
       "arguments":{
         "repo":"layer-orchestrator-v1",
-        "question":"What is this repo for? One sentence.",
+        "question":"introduce this huntAi project",
         "stream":true,
         "conversation_id":"conv_smoke_1s"
       }
@@ -135,6 +135,10 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
   -H "X-Request-Id: req-mcp-stream-1" \
   -H "X-Session-Id: ses-mcp-stream-1" \
   -H "X-Trace-Id: trc-mcp-stream-1" \
+  -H "X-User-Id: taixing" \
+  -H "X-User-Roles: hr" \
+  -H "X-User-Groups: engineering" \
+  -H "X-User-Teams: rag-platform" \
   -d '{
     "jsonrpc":"2.0",
     "id":"smoke-1s",
@@ -142,7 +146,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
     "params":{
       "name":"ask_repo",
       "arguments":{
-        "question":"What is this repo for? One sentence.",
+        "question":"introduce this huntAi project",
         "stream":true,
         "conversation_id":"conv_smoke_1s"
       }

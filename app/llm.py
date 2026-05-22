@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -15,22 +15,27 @@ from app.correlation import UserContext, user_header_values
 
 
 def llm_gateway_base() -> str:
+    """Base URL for the inference gateway (no trailing slash)."""
     return (os.environ.get("LLM_GATEWAY_BASE_URL") or "").strip().rstrip("/")
 
 
 def llm_model() -> str:
+    """Chat model id sent to the gateway."""
     return (os.environ.get("LLM_MODEL") or "Qwen/Qwen2.5-7B-Instruct").strip()
 
 
 def llm_api_key() -> str:
+    """Bearer token for the gateway (``not-needed`` skips Authorization)."""
     return (os.environ.get("LLM_API_KEY") or "not-needed").strip()
 
 
 def llm_max_tokens() -> int:
+    """Default max_tokens for chat completions."""
     return int(os.environ.get("LLM_MAX_TOKENS", "1024"))
 
 
 def llm_temperature() -> float:
+    """Sampling temperature for chat completions."""
     return float(os.environ.get("LLM_TEMPERATURE", "0.7"))
 
 
@@ -41,6 +46,7 @@ def llm_headers(
     trace_id: str | None = None,
     user: UserContext | None = None,
 ) -> dict[str, str]:
+    """Build gateway request headers with correlation and optional user identity."""
     rid = (request_id or os.environ.get("LLM_REQUEST_ID") or "").strip() or str(uuid.uuid4())
     sid = (session_id or os.environ.get("LLM_SESSION_ID") or "").strip() or str(uuid.uuid4())
     headers: dict[str, str] = {
@@ -59,12 +65,33 @@ def llm_headers(
 
 
 def usage_block(data: dict[str, Any]) -> dict[str, int]:
+    """Extract token usage from an OpenAI-style chat response object."""
     u = data.get("usage") or {}
     return {
         "prompt_tokens": int(u.get("prompt_tokens") or 0),
         "completion_tokens": int(u.get("completion_tokens") or 0),
         "total_tokens": int(u.get("total_tokens") or 0),
     }
+
+
+def _chat_payload(
+    messages: list[dict[str, str]],
+    conversation_id: str,
+    *,
+    max_tokens: int | None = None,
+    stream: bool = False,
+) -> dict[str, Any]:
+    """Shared JSON body for buffered and streaming chat completion calls."""
+    payload: dict[str, Any] = {
+        "model": llm_model(),
+        "conversation_id": conversation_id,
+        "messages": messages,
+        "max_tokens": max_tokens if max_tokens is not None else llm_max_tokens(),
+        "temperature": llm_temperature(),
+    }
+    if stream:
+        payload["stream"] = True
+    return payload
 
 
 def chat_completion(
@@ -78,17 +105,12 @@ def chat_completion(
     max_tokens: int | None = None,
     user: UserContext | None = None,
 ) -> tuple[str, dict[str, int]]:
+    """POST /v1/chat/completions (non-streaming); return assistant text and usage."""
     base = llm_gateway_base()
     if not base:
         raise ValueError("LLM_GATEWAY_BASE_URL not set in .env")
 
-    payload = {
-        "model": llm_model(),
-        "conversation_id": conversation_id,
-        "messages": messages,
-        "max_tokens": max_tokens if max_tokens is not None else llm_max_tokens(),
-        "temperature": llm_temperature(),
-    }
+    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens)
     headers = llm_headers(
         request_id=request_id, session_id=session_id, trace_id=trace_id, user=user
     )
@@ -103,6 +125,7 @@ def chat_completion(
 
 
 def parse_openai_sse_chunk(line: str) -> tuple[str | None, dict[str, int] | None]:
+    """Parse one ``data:`` line from an OpenAI-style SSE stream."""
     if not line.startswith("data:"):
         return None, None
     payload = line[5:].strip()
@@ -137,18 +160,12 @@ def iter_chat_completion_stream(
     max_tokens: int | None = None,
     user: UserContext | None = None,
 ) -> Iterator[tuple[str, Any]]:
+    """Stream chat tokens; yields (``delta``, text), (``usage``, dict), (``done``, full text)."""
     base = llm_gateway_base()
     if not base:
         raise ValueError("LLM_GATEWAY_BASE_URL not set in .env")
 
-    payload = {
-        "model": llm_model(),
-        "conversation_id": conversation_id,
-        "messages": messages,
-        "max_tokens": max_tokens if max_tokens is not None else llm_max_tokens(),
-        "temperature": llm_temperature(),
-        "stream": True,
-    }
+    payload = _chat_payload(messages, conversation_id, max_tokens=max_tokens, stream=True)
     headers = llm_headers(
         request_id=request_id, session_id=session_id, trace_id=trace_id, user=user
     )
@@ -196,6 +213,7 @@ def generate_follow_ups(
     trace_id: str | None,
     user: UserContext | None = None,
 ) -> tuple[list[str], dict[str, int]]:
+    """Ask the gateway for up to 3 follow-up questions (JSON in assistant reply)."""
     follow_max = int(os.environ.get("LLM_FOLLOW_UP_MAX_TOKENS", "256"))
     content, usage = chat_completion(
         client,

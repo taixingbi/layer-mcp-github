@@ -39,6 +39,8 @@ async def ask_repo(
             trace_id=trace_id,
             conversation_id_arg=conversation_id,
             ctx=ctx,
+            http_path="stdio",
+            tool_name="ask_repo",
         )
 
     return await anyio.to_thread.run_sync(
@@ -50,6 +52,10 @@ async def ask_repo(
             session_id=session_id,
             trace_id=trace_id,
             conversation_id_arg=conversation_id,
+            http_method="-",
+            http_path="stdio",
+            stream=False,
+            tool_name="ask_repo",
         )
     )
 
@@ -73,4 +79,5 @@ async def ask_repo_stream(
         trace_id=trace_id,
         conversation_id_arg=conversation_id,
         ctx=ctx,
+        tool_name="ask_repo_stream",
     )

@@ -6,6 +6,7 @@ MCP server that answers natural-language questions about a **fixed set of GitHub
 |------|----------|
 | [schema.md](docs/schema.md) | MCP `ask_repo` contract |
 | [design.md](docs/design.md) | Architecture, streaming, config, `app/` layout |
+| [log-json-schema.md](docs/log-json-schema.md) | stderr JSON log fields |
 | [smoke-test.md](docs/smoke-test.md) | curl checks for MCP + gateway |
 
 **Default:** omit `repo` → all repos in [`app/repo_allowlist.py`](app/repo_allowlist.py). **Narrow:** `"repo": "layer-orchestrator-v1"` (short name or `owner/name`).

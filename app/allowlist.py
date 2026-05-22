@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from app.repo_allowlist import ALLOWED_REPOS
 
 
 def allowed_short_names() -> list[str]:
+    """Return allowlisted repo short names (no owner prefix)."""
     return list(ALLOWED_REPOS)
 
 
 def fail(error: str, repo: str = "", **extra: Any) -> dict[str, Any]:
+    """Standard error payload including allowed repo list."""
     out: dict[str, Any] = {"ok": False, "error": error, "allowed": allowed_short_names()}
     if repo:
         out["repo"] = repo
@@ -20,12 +23,12 @@ def fail(error: str, repo: str = "", **extra: Any) -> dict[str, Any]:
 
 
 def _github_owner() -> str:
-    import os
-
+    """GitHub org/user from GITHUB_OWNER env."""
     return (os.environ.get("GITHUB_OWNER") or "").strip()
 
 
 def _resolve_single_repo(raw: str, allowed: list[str], owner: str) -> dict[str, Any]:
+    """Validate one repo string against owner + allowlist."""
     if "/" in raw:
         parts = raw.split("/", 1)
         if len(parts) != 2 or not parts[0] or not parts[1]:
@@ -43,7 +46,7 @@ def _resolve_single_repo(raw: str, allowed: list[str], owner: str) -> dict[str, 
 
 
 def resolve_repo(repo: str) -> dict[str, Any]:
-    """Validate repo against allowlist; return {ok, full_name} or error dict."""
+    """Validate one repo against allowlist; return ``{ok, full_name}`` or error dict."""
     allowed = allowed_short_names()
     if not allowed:
         return fail("allowlist is empty")
@@ -60,7 +63,7 @@ def resolve_repo(repo: str) -> dict[str, Any]:
 
 
 def resolve_repos(repo: str | None = None) -> dict[str, Any]:
-    """Resolve one repo or all allowlisted repos when repo is omitted."""
+    """Resolve one repo or all allowlisted repos when ``repo`` is omitted."""
     allowed = allowed_short_names()
     if not allowed:
         return fail("allowlist is empty")

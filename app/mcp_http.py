@@ -15,12 +15,15 @@ from app.correlation import (
     resolve_conversation_id,
     response_correlation_headers,
 )
-from app.streaming import sse_format, stream_ask_repo_events
+from app.logging_config import logger
+from app.sse import remap_frame_for_mcp_client
+from app.streaming import stream_ask_repo_events
 
 STREAM_TOOLS = frozenset({"ask_repo", "ask_repo_stream"})
 
 
 def _truthy_stream(value: Any) -> bool:
+    """Treat MCP tool ``stream`` argument as boolean."""
     if value is True:
         return True
     if isinstance(value, str):
@@ -29,11 +32,13 @@ def _truthy_stream(value: Any) -> bool:
 
 
 def accepts_event_stream(request: Request) -> bool:
+    """True when the client Accept header includes ``text/event-stream``."""
     accept = (request.headers.get("accept") or "").lower()
     return "text/event-stream" in accept
 
 
 def is_streaming_tools_call(body: dict[str, Any]) -> bool:
+    """True for tools/call on ask_repo(stream) or ask_repo_stream."""
     if body.get("method") != "tools/call":
         return False
     params = body.get("params") or {}
@@ -46,11 +51,8 @@ def is_streaming_tools_call(body: dict[str, Any]) -> bool:
     return _truthy_stream(args.get("stream"))
 
 
-def wants_mcp_sse(request: Request, body: dict[str, Any]) -> bool:
-    return request.method == "POST" and accepts_event_stream(request) and is_streaming_tools_call(body)
-
-
 def parse_tools_call_arguments(body: dict[str, Any]) -> tuple[str | None, str, dict[str, Any]]:
+    """Extract repo, question, and raw arguments from a JSON-RPC tools/call body."""
     params = body.get("params") or {}
     args = dict(params.get("arguments") or {})
     repo = args.get("repo")
@@ -63,6 +65,7 @@ def parse_tools_call_arguments(body: dict[str, Any]) -> tuple[str | None, str, d
 
 
 def tools_call_stream_kwargs(request: Request, args: dict[str, Any]) -> dict[str, Any]:
+    """Merge HTTP correlation headers with optional tool-argument overrides."""
     rid, sid, tid = parse_http_correlation(request)
     user = parse_http_user(request)
     conv = resolve_conversation_id(args.get("conversation_id"), use_env=False)
@@ -75,35 +78,34 @@ def tools_call_stream_kwargs(request: Request, args: dict[str, Any]) -> dict[str
     }
 
 
-def _map_frame_for_mcp_client(frame: str) -> str:
-    """Use event name `delta` (not `answer_delta`) for MCP HTTP SSE clients."""
-    event = ""
-    data: dict[str, Any] = {}
-    for line in frame.split("\n"):
-        if line.startswith("event:"):
-            event = line[6:].strip()
-        elif line.startswith("data:"):
-            try:
-                data = json.loads(line[5:].strip())
-            except json.JSONDecodeError:
-                data = {}
-    if event == "answer_delta":
-        return sse_format("delta", data)
-    return frame
-
-
 async def mcp_tools_call_sse(
     request: Request,
     body: dict[str, Any],
 ) -> AsyncIterator[str]:
+    """Run ask_repo streaming and remap SSE events for MCP HTTP clients."""
     repo, question, args = parse_tools_call_arguments(body)
     extra = tools_call_stream_kwargs(request, args)
+    params = body.get("params") or {}
+    tool_name = str(params.get("name") or "ask_repo")
 
-    async for frame in stream_ask_repo_events(repo, question, **extra):
-        yield _map_frame_for_mcp_client(frame)
+    logger.info(
+        f"mcp tools/call sse start tool={tool_name}",
+        extra={"tool_name": tool_name, "stream": True, "phase": "sse_start"},
+    )
+
+    async for frame in stream_ask_repo_events(
+        repo,
+        question,
+        http_method=request.method,
+        http_path=request.url.path.rstrip("/") or "/mcp",
+        tool_name=tool_name,
+        **extra,
+    ):
+        yield remap_frame_for_mcp_client(frame)
 
 
 def mcp_streaming_response(request: Request, body: dict[str, Any]) -> StreamingResponse:
+    """Build a StreamingResponse with correlation headers for tools/call SSE."""
     rid, sid, tid = parse_http_correlation(request)
     user = parse_http_user(request)
     args = (body.get("params") or {}).get("arguments") or {}
@@ -120,6 +122,7 @@ def mcp_streaming_response(request: Request, body: dict[str, Any]) -> StreamingR
 
 
 def replay_request(request: Request, body_bytes: bytes) -> Request:
+    """Reconstruct a Starlette Request with a fixed body (after middleware consumed it)."""
     async def receive():
         return {"type": "http.request", "body": body_bytes, "more_body": False}
 

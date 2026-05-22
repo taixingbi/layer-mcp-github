@@ -19,7 +19,7 @@ curl -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
   -H "X-User-Teams: rag-platform" \
   -d '{
   "repo": "layer-orchestrator-v1",
-        "question": "What is this repo for? One sentence.",
+        "question": "introduce this huntAi project",
         "stream": false,
         "conversation_id": "conv_smoke_1"
     }

@@ -8,6 +8,7 @@ from app.config import LLM_CONTEXT_README_MAX, MULTI_REPO_README_MAX
 
 
 def repo_web_url(full_name: str) -> str:
+    """Canonical GitHub web URL for ``owner/repo``."""
     return f"https://github.com/{full_name}"
 
 
@@ -18,6 +19,7 @@ def build_citations(
     *,
     readme_label: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Numbered citations: README first, then deduped code file URLs."""
     citations: list[dict[str, Any]] = []
     idx = 1
     if readme:
@@ -68,6 +70,7 @@ def build_citations(
 
 
 def merge_citations(repo_blocks: list[tuple[str, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    """Renumber citations across multiple repos into one contiguous list."""
     merged: list[dict[str, Any]] = []
     offset = 0
     for _full_name, block in repo_blocks:
@@ -80,6 +83,7 @@ def merge_citations(repo_blocks: list[tuple[str, list[dict[str, Any]]]]) -> list
 def format_sources_for_llm(
     citations: list[dict[str, Any]], readme: str, code_hits: list[dict[str, str]]
 ) -> str:
+    """Format single-repo sources block for the LLM user message."""
     lines = ["## Sources (use [n] in answer)"]
     for c in citations:
         lines.append(f"[{c['index']}] {c.get('label', '')} — {c['url']}")
@@ -99,6 +103,7 @@ def format_multi_repo_sources(
     readmes: dict[str, str],
     code_hits: list[dict[str, str]],
 ) -> str:
+    """Format multi-repo sources block for the LLM user message."""
     lines = ["## Sources (use [n] in answer)"]
     for c in citations:
         lines.append(f"[{c['index']}] {c.get('label', '')} — {c['url']}")
