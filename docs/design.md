@@ -2,105 +2,61 @@
 
 ## Purpose
 
-Let agents (Cursor) ask **natural-language questions** about a fixed set of **GitHub repos**, with answers grounded in repo evidence and synthesized by the **LLM gateway** the layer stack uses.
+MCP server for natural-language Q&A over allowlisted GitHub repos, with LLM synthesis and citations.
 
-Python package under `app/`. **MCP** (stdio or `/mcp`) plus **`POST /ask`** (JSON or SSE).
-
-## Scope
-
-| In scope | Out of scope |
-|----------|----------------|
-| Repos in `app/repo_allowlist.py` | Arbitrary public GitHub search |
-| README + per-repo code search | Full repo clone / tree index |
-| LLM answer + GitHub citations | Vector DB / RAG ingest |
-| MCP `ask_repo` + `POST /ask` | Arbitrary GitHub search |
+**MCP only:** stdio (Cursor) or `POST /mcp` (`--http`). No REST `/ask`.
 
 ## Architecture
 
 ```text
 Client
   ├─ Cursor (stdio)     python -m app.main
-  ├─ POST /ask          JSON or SSE
-  └─ POST /mcp          streamable-http MCP
+  └─ curl               python -m app.main --http  →  POST /mcp
         │
         ▼
-   tools.ask_repo  →  pipeline.ask_repo_impl  |  streaming.ask_repo_mcp_stream
+   McpStreamMiddleware (SSE tools/call)
+        │
+        ▼
+   tools.ask_repo  →  pipeline / streaming
         │
    ┌────┴────┐
    ▼         ▼
 GitHub     LLM gateway
-REST       POST /v1/chat/completions
 ```
 
 ## Modules
 
 | Module | Role |
 |--------|------|
-| `main.py` | Entry; stdio or `--http` MCP |
-| `mcp_server.py` | FastMCP (`HTTP_HOST`, `HTTP_PORT` for streamable-http) |
+| `main.py` | Entry |
+| `mcp_app.py` | Starlette app, `/mcp`, SSE middleware |
+| `mcp_http.py` | Stream detection + SSE generator |
+| `mcp_server.py` | FastMCP |
 | `tools.py` | `ask_repo`, `ask_repo_stream` |
-| `http_routes.py` | `POST /ask` |
-| `correlation.py` | HTTP headers + MCP ids; `X-User-*` |
+| `pipeline.py` | Buffered `ask_repo_impl` |
+| `streaming.py` | Shared SSE event pipeline |
 | `repo_allowlist.py` | `ALLOWED_REPOS` |
-| `allowlist.py` | `resolve_repo`, `resolve_repos` |
-| `pipeline.py` | `ask_repo_impl` (buffered) |
-| `streaming.py` | Internal SSE frames + MCP progress/deltas |
+| `allowlist.py` | `resolve_repos` |
 | `github_client.py` | README + code search |
-| `llm.py` | Gateway chat / stream |
-| `correlation.py` | MCP tool correlation ids |
-| `citations.py` | Numbered sources for LLM |
-| `config.py` | Env, prompts, limits |
+| `llm.py` | Gateway |
+| `correlation.py` | Ids + optional `X-User-*` on `/mcp` |
+| `citations.py` | `[n]` sources |
 
-## Request flow
+## Streaming
 
-1. **Resolve repos** — `allowlist.resolve_repos`
-2. **GitHub evidence** — README per repo; code search per repo
-3. **Citations** — `[1]…[n]` merged for multi-repo
-4. **LLM answer** — sources-only prompt
-5. **Follow-ups** — second completion → 3 questions
-6. **Response** — JSON in MCP `structuredContent`
-
-## `ask_repo` contract
-
-See [schema.md](schema.md).
-
-| `stream` | Behavior |
-|----------|----------|
-| `false` | `ask_repo_impl` in worker thread; one JSON result |
-| `true` | `ask_repo_mcp_stream`: progress + `answer_delta` logs; same final JSON |
+| Mode | Behavior |
+|------|----------|
+| stdio + `stream: true` | MCP progress + logs; final JSON |
+| HTTP `/mcp` + SSE Accept + `stream: true` | `meta`, `delta`, `done` events |
+| HTTP `/mcp` buffered | JSON-RPC `structuredContent` |
 
 ## Configuration
 
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `GITHUB_TOKEN` | yes | PAT, `repo` scope |
-| `GITHUB_OWNER` | yes | User or org |
-| `LLM_GATEWAY_BASE_URL` | yes | e.g. `http://host:30180` |
-| `HTTP_HOST` / `HTTP_PORT` | no | For `--http` MCP only (default `127.0.0.1:8000`) |
-
-## Security
-
-- Do not commit `.env`
-- Only `ALLOWED_REPOS` are queryable
-- `--http` exposes MCP on the network — use policy/firewall as needed
-
-## Repository layout
-
-```text
-layer-mcp-github/
-├── app/          # Python package
-├── Dockerfile
-├── docker-compose.yml
-├── docs/
-│   ├── schema.md
-│   ├── design.md
-│   └── smoke-test.md
-└── README.md
-```
+`GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL` required. `HTTP_HOST` / `HTTP_PORT` for `--http`.
 
 ## Design choices
 
-1. **MCP + `/ask`** — Cursor uses MCP; scripts may use `POST /ask` with the same pipeline.
-2. **Allowlist in code** — Versioned with the server.
-3. **Default = full allowlist** — `repo` narrows scope.
+1. **MCP-only surface** — One protocol; no parallel REST API.
+2. **SSE middleware** — Bypasses MCP SDK `application/json` Accept check for real streaming.
+3. **Allowlist in code** — `app/repo_allowlist.py`.
 4. **Per-repo code search** — Avoids GitHub multi-repo 422.

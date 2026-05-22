@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import app.http_routes  # noqa: F401 — register /ask
 import app.tools  # noqa: F401 — register tools
 from app.allowlist import allowed_short_names, resolve_repo, resolve_repos
 from app.config import HTTP_PORT
@@ -28,11 +27,14 @@ def _run_server() -> None:
     if "--http" in sys.argv:
         llm = llm_gateway_base() or "(not set — ask_repo will fail)"
         default_repos = allowed_short_names()
-        print(f"MCP (streamable-http) http://127.0.0.1:{HTTP_PORT}/mcp", flush=True)
-        print(f"HTTP POST http://127.0.0.1:{HTTP_PORT}/ask  (JSON or SSE; stream: true)", flush=True)
+        print(f"MCP http://127.0.0.1:{HTTP_PORT}/mcp  (stream: Accept SSE + stream:true)", flush=True)
         print(f"LLM gateway: {llm}", flush=True)
         print(f"Default repos ({len(default_repos)}): {', '.join(default_repos)}", flush=True)
-        mcp.run(transport="streamable-http")
+        import anyio
+
+        from app.mcp_app import run_mcp_http_server
+
+        anyio.run(run_mcp_http_server)
     else:
         mcp.run(transport="stdio")
 

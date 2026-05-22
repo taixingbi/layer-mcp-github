@@ -1,83 +1,69 @@
-# HTTP and MCP contract
+# MCP contract
 
-Aligned with [layer-rag-query-v1 `docs/schema.md`](https://github.com/taixingbi/layer-rag-query-v1/blob/main/docs/schema.md). Implementation: [`app/http_routes.py`](../app/http_routes.py), [`app/tools.py`](../app/tools.py), [`app/correlation.py`](../app/correlation.py).
+Implementation: [`app/tools.py`](../app/tools.py), [`app/mcp_http.py`](../app/mcp_http.py), [`app/mcp_app.py`](../app/mcp_app.py). Runnable checks: [smoke-test.md](smoke-test.md).
 
----
-
-## Endpoints
-
-| Method | Path | Response | Purpose |
-|--------|------|----------|---------|
-| `POST` | `/ask` | `application/json` or `text/event-stream` | GitHub evidence + LLM answer |
-| `POST` | `/mcp` | MCP JSON-RPC | `tools/call` → `ask_repo` |
+**No REST API** — only stdio MCP (Cursor) or `POST /mcp` (streamable-http with `--http`).
 
 ---
 
-## `POST /ask`
+## Endpoint
 
-### Request headers
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/mcp` | JSON-RPC (buffered) or SSE (stream) |
+| `GET` / `DELETE` | `/mcp` | MCP streamable-http session |
 
-#### Correlation (header-only)
+---
 
-| Header | Required | Notes |
-|--------|----------|-------|
-| `Content-Type` | yes | `application/json` |
-| `X-Request-Id` | no | Omitted → server UUID |
-| `X-Session-Id` | no | Omitted → server UUID |
-| `X-Trace-Id` | no | Omitted → `trace_id: null` in body / SSE `meta` |
+## Tools
 
-#### User context (header-only)
+| Tool | Notes |
+|------|-------|
+| `ask_repo` | Main tool; `stream: true` + `Accept: text/event-stream` → SSE |
+| `ask_repo_stream` | Alias for `ask_repo(..., stream=true)` |
 
-| Header | Required | Default | Notes |
-|--------|----------|---------|-------|
-| `X-User-Id` | no | `"-"` | Echoed on `200` |
-| `X-User-Roles` | no | `anyuser` | Comma-separated |
-| `X-User-Groups` | no | `""` | Comma-separated |
-| `X-User-Teams` | no | `""` | Comma-separated |
+---
 
-**Forbidden in JSON body:** `request_id`, `session_id`, `trace_id`, `user_id`, `user_roles`, `user_groups`, `user_teams` → **400**.
+## `ask_repo` arguments
 
-#### Streaming
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `question` | yes | — | User question |
+| `repo` | no | all allowlisted | Short name or `owner/name` |
+| `stream` | no | `false` | `true` → SSE on HTTP `/mcp` when Accept allows |
+| `request_id` | no | env / UUID | `X-Request-Id` to gateway |
+| `session_id` | no | env / UUID | `X-Session-Id` |
+| `trace_id` | no | env / `null` | `X-Trace-Id` when set |
+| `conversation_id` | no | `conv_<hex>` | Gateway chat body |
 
-| Header | Notes |
-|--------|-------|
-| `Accept: text/event-stream` | Request SSE (OR body `"stream": true`) |
+---
 
-### Request body
+## Buffered response (`stream: false`)
 
-| Field | Required | Default |
-|-------|----------|---------|
-| `question` | yes | — |
-| `repo` | no | all allowlisted |
-| `stream` | no | `false` |
-| `conversation_id` | no | `conv_<hex>` |
+JSON-RPC result with `.result.structuredContent`:
 
-### JSON response (`stream: false`)
+`ok`, `answer`, `citations`, `follow_up_questions`, `latency_ms`, `usage`, correlation ids, `repos` / `repo`.
 
-Response headers: `X-Request-Id`, `X-Session-Id`, `X-Conversation-Id`, `X-User-Id`, optional `X-Trace-Id`.
+---
 
-Body: same shape as MCP `structuredContent` (`ok`, `answer`, `citations`, correlation ids, …).
+## Real SSE on `POST /mcp`
 
-### SSE events (`stream: true`)
+When **both** `Accept: text/event-stream` and `tools/call` with `stream: true` (or `ask_repo_stream`):
 
 | Event | Notes |
 |-------|-------|
-| `meta` | Correlation + `user_id`, `user_roles`, `user_groups`, `user_teams` |
-| `status` | Phase progress |
-| `answer_delta` | `{ "text": "..." }` |
+| `meta` | Correlation ids; optional `user_*` from `X-User-*` headers |
+| `status` | `github_readme`, `github_done`, `chat_stream`, … |
+| `delta` | `{ "text": "..." }` per token |
 | `done` | Full result object |
 | `error` | `{ "ok": false, "error": "..." }` |
 
+Optional headers: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Id`, `X-User-Roles`, `X-User-Groups`, `X-User-Teams`.
+
 ---
 
-## MCP `ask_repo`
+## Related docs
 
-| Argument | HTTP equivalent |
-|----------|-----------------|
-| `request_id` | `X-Request-Id` |
-| `session_id` | `X-Session-Id` |
-| `trace_id` | `X-Trace-Id` |
-| `conversation_id` | body `conversation_id` |
-| (no user headers on MCP) | `X-User-*` on HTTP only |
-
-See [smoke-test.md](smoke-test.md) for `curl` examples.
+- [smoke-test.md](smoke-test.md)
+- [design.md](design.md)
+- [README.md](../README.md)

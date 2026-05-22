@@ -4,7 +4,7 @@ MCP server that answers natural-language questions about a **fixed set of GitHub
 
 | Docs | Contents |
 |------|----------|
-| [schema.md](docs/schema.md) | `POST /ask` and MCP `ask_repo` contract |
+| [schema.md](docs/schema.md) | MCP `ask_repo` contract |
 | [design.md](docs/design.md) | Architecture, streaming, config, `app/` layout |
 | [smoke-test.md](docs/smoke-test.md) | curl checks for MCP + gateway |
 
@@ -22,7 +22,7 @@ cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
 | Mode | Command |
 |------|---------|
 | **Cursor** (stdio MCP) | `python -m app.main` — [`.cursor/mcp.json`](.cursor/mcp.json) |
-| **MCP + HTTP** | `python -m app.main --http` → `/mcp` and `POST /ask` |
+| **MCP over HTTP** (curl) | `python -m app.main --http` → `POST /mcp` only |
 
 Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: `HTTP_HOST`, `HTTP_PORT`, `LLM_MODEL`, … — see [`.env.example`](.env.example).
 
@@ -30,7 +30,7 @@ Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: 
 
 Edit `ALLOWED_REPOS` in [`app/repo_allowlist.py`](app/repo_allowlist.py) and restart the server.
 
-Today: **9** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md) for `owner/name` rules.
+Today: **9** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 
 ## MCP tool: `ask_repo`
 
@@ -38,21 +38,22 @@ Today: **9** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md) for `ow
 |----------|----------|---------|-------------|
 | `question` | yes | — | Natural-language question |
 | `repo` | no | all allowlisted | Short name or `owner/name` |
-| `stream` | no | `false` | `true` → progress + `answer_delta` logs; same final JSON |
-| `request_id` | no | env / UUID | `X-Request-Id` on gateway |
-| `session_id` | no | env / UUID | `X-Session-Id` |
-| `trace_id` | no | env / null | `X-Trace-Id` when set |
+| `stream` | no | `false` | `true` → SSE on `/mcp` when `Accept: text/event-stream` |
+| `request_id` | no | env / UUID | Forwarded as `X-Request-Id` |
+| `session_id` | no | env / UUID | Forwarded as `X-Session-Id` |
+| `trace_id` | no | env / null | Forwarded as `X-Trace-Id` when set |
 | `conversation_id` | no | `conv_<hex>` | Gateway thread id |
 
 `ask_repo_stream` is an alias for `ask_repo` with `stream: true`.
 
-### HTTP `POST /ask`
-
-Correlation and user context via **headers** (`X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …). Set `"stream": true` or `Accept: text/event-stream` for SSE. See [smoke-test.md](docs/smoke-test.md) §5.
-
 ### MCP over HTTP (`--http`)
 
-JSON-RPC on `POST /mcp` (no trailing slash). `tools/call` → `ask_repo`.
+`POST /mcp` (no trailing slash):
+
+- **Buffered:** `Accept: application/json`, `"stream": false` → JSON-RPC `structuredContent`
+- **Real SSE:** `Accept: text/event-stream` **and** `"stream": true` → `meta` / `delta` / `done` (smoke-test §4)
+
+Optional headers on `/mcp`: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …
 
 ### Response fields
 
@@ -62,19 +63,19 @@ JSON-RPC on `POST /mcp` (no trailing slash). `tools/call` → `ask_repo`.
 
 ```text
 app/
-├── main.py            # entry (stdio / --http MCP)
+├── main.py            # entry (stdio / --http)
 ├── mcp_server.py      # FastMCP instance
+├── mcp_app.py         # streamable-http + SSE middleware
+├── mcp_http.py        # /mcp SSE tools/call
 ├── tools.py           # ask_repo MCP tools
-├── http_routes.py     # POST /ask
 ├── repo_allowlist.py  # ALLOWED_REPOS
-├── allowlist.py       # resolve_repo / resolve_repos
 ├── pipeline.py        # ask_repo_impl
-├── streaming.py       # MCP stream consumer
-├── github_client.py   # README + code search
-├── llm.py             # gateway chat / stream
-├── correlation.py     # ids for MCP + gateway
-├── config.py          # env, prompts
-└── citations.py       # [n] sources
+├── streaming.py       # event pipeline
+├── github_client.py
+├── llm.py
+├── correlation.py
+├── config.py
+└── citations.py
 ```
 
 ## Cursor
@@ -87,18 +88,16 @@ Enable MCP server **layer-github**. Examples:
 ## Docker
 
 ```bash
-docker pull YOUR_DOCKERHUB_USER/layer-mcp-github:latest
 docker run -p 8000:8000 --env-file .env YOUR_DOCKERHUB_USER/layer-mcp-github:latest
 ```
 
-Image runs `python -m app.main --http` (MCP on port **8000**). Gateway URL must be reachable from the container.
+Runs `python -m app.main --http` (MCP on port **8000**).
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| Empty curl body | Use `/mcp` not `/mcp/` |
-| No `answer` | `LLM_GATEWAY_BASE_URL` in `.env`; restart server |
-| `repo not allowed` | Name in `ALLOWED_REPOS`; owner = `GITHUB_OWNER` |
-| Slow default query | 9 repos; pass `"repo"` to narrow |
-| Stale behavior | Restart after code changes |
+| Port in use | `lsof -ti :8000 \| xargs kill -9` then restart |
+| Empty curl body | `/mcp` not `/mcp/` |
+| No `answer` | `LLM_GATEWAY_BASE_URL` in `.env` |
+| MCP stream JSON error | Restart server; use `Accept: text/event-stream` + `stream: true` |
