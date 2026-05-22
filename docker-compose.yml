@@ -1,4 +1,4 @@
-# MCP HTTP + SSE. Pass secrets via env_file (never bake .env into the image).
+# MCP streamable-http. Pass secrets via env_file (never bake .env into the image).
 services:
   layer-mcp-github:
     image: layer-mcp-github

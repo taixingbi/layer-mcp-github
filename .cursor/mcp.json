@@ -2,7 +2,7 @@
   "mcpServers": {
     "layer-github": {
       "command": "${workspaceFolder}/venv/bin/python3",
-      "args": ["server.py"],
+      "args": ["-m", "app.main"],
       "cwd": "${workspaceFolder}"
     }
   }

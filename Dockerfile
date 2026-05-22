@@ -1,4 +1,4 @@
-# layer-mcp-github: MCP HTTP + POST /ask/stream (default port 8000).
+# layer-mcp-github: MCP streamable-http on port 8000.
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -13,7 +13,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py tmp.md ./
+COPY app ./app
 
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 1000 appuser \
     && chown -R appuser:appuser /app
@@ -22,4 +22,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["python", "server.py", "--http"]
+CMD ["python", "-m", "app.main", "--http"]

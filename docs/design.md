@@ -2,114 +2,105 @@
 
 ## Purpose
 
-Let agents (Cursor) and scripts ask **natural-language questions** about a fixed set of **private GitHub repos**, with answers grounded in repo evidence and synthesized by the same **LLM gateway** the layer stack already uses.
+Let agents (Cursor) ask **natural-language questions** about a fixed set of **GitHub repos**, with answers grounded in repo evidence and synthesized by the **LLM gateway** the layer stack uses.
 
-Not a hosted GitHub MCP replacement. Not an orchestrator extension. Single Python process (`server.py`), minimal dependencies.
+Python package under `app/`. **MCP** (stdio or `/mcp`) plus **`POST /ask`** (JSON or SSE).
 
 ## Scope
 
 | In scope | Out of scope |
 |----------|----------------|
-| Allowlisted repos in [`tmp.md`](../tmp.md) | Arbitrary public GitHub search |
-| README + code search evidence | Cloning repos or full tree indexing |
-| LLM answer + numbered GitHub citations | Vector DB / RAG ingest pipeline |
-| MCP tools + HTTP SSE for curl | Changes to `layer-orchestrator-v1` |
+| Repos in `app/repo_allowlist.py` | Arbitrary public GitHub search |
+| README + per-repo code search | Full repo clone / tree index |
+| LLM answer + GitHub citations | Vector DB / RAG ingest |
+| MCP `ask_repo` + `POST /ask` | Arbitrary GitHub search |
 
 ## Architecture
 
 ```text
-Client (Cursor stdio | curl MCP | curl SSE)
+Client
+  ├─ Cursor (stdio)     python -m app.main
+  ├─ POST /ask          JSON or SSE
+  └─ POST /mcp          streamable-http MCP
         │
         ▼
-┌───────────────────┐
-│  server.py        │
-│  FastMCP          │
-│  · ask_repo       │─── buffered JSON
-│  · ask_repo_stream│─── MCP progress + logs
-│  · POST /ask/stream ─── HTTP SSE
-└─────────┬─────────┘
-          │
-    ┌─────┴─────┐
-    ▼           ▼
- GitHub API   LLM gateway
- (REST)       POST /v1/chat/completions
+   tools.ask_repo  →  pipeline.ask_repo_impl  |  streaming.ask_repo_mcp_stream
+        │
+   ┌────┴────┐
+   ▼         ▼
+GitHub     LLM gateway
+REST       POST /v1/chat/completions
 ```
+
+## Modules
+
+| Module | Role |
+|--------|------|
+| `main.py` | Entry; stdio or `--http` MCP |
+| `mcp_server.py` | FastMCP (`HTTP_HOST`, `HTTP_PORT` for streamable-http) |
+| `tools.py` | `ask_repo`, `ask_repo_stream` |
+| `http_routes.py` | `POST /ask` |
+| `correlation.py` | HTTP headers + MCP ids; `X-User-*` |
+| `repo_allowlist.py` | `ALLOWED_REPOS` |
+| `allowlist.py` | `resolve_repo`, `resolve_repos` |
+| `pipeline.py` | `ask_repo_impl` (buffered) |
+| `streaming.py` | Internal SSE frames + MCP progress/deltas |
+| `github_client.py` | README + code search |
+| `llm.py` | Gateway chat / stream |
+| `correlation.py` | MCP tool correlation ids |
+| `citations.py` | Numbered sources for LLM |
+| `config.py` | Env, prompts, limits |
 
 ## Request flow
 
-1. **Resolve repos** — No `repo` → all short names in `tmp.md` under `GITHUB_OWNER`. Optional `repo` → one repo (validated against allowlist).
-2. **GitHub evidence**
-   - `GET /repos/{owner}/{repo}/readme` per repo (truncated for context).
-   - `GET /search/code` per repo (avoids multi-repo `OR` queries that GitHub often rejects with 422).
-3. **Citations** — Numbered `[1]…[n]` with GitHub repo root (README) and file URLs from search hits. Merged across repos when scope is “all”.
-4. **LLM answer** — System prompt requires citing only provided sources. User message contains question + formatted sources/snippets.
-5. **Follow-ups** — Second completion asks for 3 questions as JSON (`follow_up_questions`).
-6. **Response** — RAG-style object: `answer`, `citations`, `repos`, `latency_ms`, `usage`, correlation ids.
+1. **Resolve repos** — `allowlist.resolve_repos`
+2. **GitHub evidence** — README per repo; code search per repo
+3. **Citations** — `[1]…[n]` merged for multi-repo
+4. **LLM answer** — sources-only prompt
+5. **Follow-ups** — second completion → 3 questions
+6. **Response** — JSON in MCP `structuredContent`
 
-## Entry points
+## `ask_repo` contract
 
-| Surface | Transport | LLM answer mode |
-|---------|-----------|-----------------|
-| `ask_repo` | MCP `tools/call` | Non-stream (`stream: false`) |
-| `ask_repo_stream` | MCP `tools/call` | Stream; tokens via MCP `info` logs + `report_progress` |
-| `POST /ask/stream` | HTTP SSE | Stream; events `status`, `answer_delta`, `done` |
+See [schema.md](schema.md).
 
-Follow-up LLM call is always non-stream in all modes.
-
-## Response shape
-
-Aligned with layer RAG/orchestrator answers:
-
-- `ok`, `repos` (and `repo` when single-target)
-- `answer` — text with `[n]` markers
-- `citations[]` — `{ index, url, label, repo, type }`
-- `follow_up_questions[]` (length 3 when parse succeeds)
-- `latency_ms` — `github_readme`, `github_search`, `chat`, `follow_up_chat`, `total`
-- `usage` — token counts per LLM call
-- `request_id`, `session_id`, `trace_id`, `conversation_id`
-
-Errors: `ok: false`, `error`, often `allowed` listing `tmp.md` names.
+| `stream` | Behavior |
+|----------|----------|
+| `false` | `ask_repo_impl` in worker thread; one JSON result |
+| `true` | `ask_repo_mcp_stream`: progress + `answer_delta` logs; same final JSON |
 
 ## Configuration
 
-Loaded from project-root `.env` (see [`.env.example`](../.env.example)):
-
-- **GitHub:** `GITHUB_TOKEN`, `GITHUB_OWNER`
-- **LLM:** `LLM_GATEWAY_BASE_URL`, optional model/tokens/temperature, tracing headers, `LLM_API_KEY`
-- **HTTP:** `HTTP_PORT` (default 8000)
-
-Conversation id default: `github-all` (multi-repo) or `github-{owner-repo}` (single).
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `GITHUB_TOKEN` | yes | PAT, `repo` scope |
+| `GITHUB_OWNER` | yes | User or org |
+| `LLM_GATEWAY_BASE_URL` | yes | e.g. `http://host:30180` |
+| `HTTP_HOST` / `HTTP_PORT` | no | For `--http` MCP only (default `127.0.0.1:8000`) |
 
 ## Security
 
-- PAT in `.env` only; never committed.
-- Tool cannot query repos outside `tmp.md`.
-- Custom `/ask/stream` route has no auth (local dev); bind is `127.0.0.1`.
+- Do not commit `.env`
+- Only `ALLOWED_REPOS` are queryable
+- `--http` exposes MCP on the network — use policy/firewall as needed
 
-## Repo layout
+## Repository layout
 
 ```text
 layer-mcp-github/
-├── server.py
-├── tmp.md
+├── app/          # Python package
 ├── Dockerfile
 ├── docker-compose.yml
-├── .github/workflows/docker-push.yml
 ├── docs/
+│   ├── schema.md
+│   ├── design.md
+│   └── smoke-test.md
 └── README.md
 ```
 
 ## Design choices
 
-1. **Single file** — Fast to ship and debug; no FastAPI envelope or multi-module split.
-2. **Cursor-only orchestration** — No new service inside `layer-orchestrator-v1`.
-3. **Default = full allowlist** — Matches “whole stack” questions; optional `repo` for focus.
-4. **Per-repo code search** — Reliability over one combined GitHub query.
-5. **Two curl paths** — MCP JSON for tools; SSE for terminal streaming without parsing MCP envelopes.
-
-## Future (not implemented)
-
-- Caching READMEs / search results
-- Parallel GitHub fetches
-- Auth on `/ask/stream`
-- Official GitHub hosted MCP as primary runtime
+1. **MCP + `/ask`** — Cursor uses MCP; scripts may use `POST /ask` with the same pipeline.
+2. **Allowlist in code** — Versioned with the server.
+3. **Default = full allowlist** — `repo` narrows scope.
+4. **Per-repo code search** — Avoids GitHub multi-repo 422.

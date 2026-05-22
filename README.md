@@ -1,8 +1,14 @@
 # layer-mcp-github
 
-Ask questions about GitHub repos listed in [`tmp.md`](tmp.md). Uses GitHub (README + code search) and your LLM gateway. Docs: [`docs/design.md`](docs/design.md), [`docs/smoke-test.md`](docs/smoke-test.md).
+MCP server that answers natural-language questions about a **fixed set of GitHub repos**. It pulls README + code search from GitHub, synthesizes an answer through your **LLM gateway** (`POST /v1/chat/completions`), and returns RAG-style JSON with numbered citations and GitHub URLs.
 
-**Default:** omit `repo` → searches all 9 repos. **Optional:** `"repo": "layer-orchestrator-v1"` for one repo.
+| Docs | Contents |
+|------|----------|
+| [schema.md](docs/schema.md) | `POST /ask` and MCP `ask_repo` contract |
+| [design.md](docs/design.md) | Architecture, streaming, config, `app/` layout |
+| [smoke-test.md](docs/smoke-test.md) | curl checks for MCP + gateway |
+
+**Default:** omit `repo` → all repos in [`app/repo_allowlist.py`](app/repo_allowlist.py). **Narrow:** `"repo": "layer-orchestrator-v1"` (short name or `owner/name`).
 
 ## Setup
 
@@ -11,56 +17,88 @@ cd layer-mcp-github
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
-python server.py --http
 ```
 
-Endpoints (HTTP mode):
+| Mode | Command |
+|------|---------|
+| **Cursor** (stdio MCP) | `python -m app.main` — [`.cursor/mcp.json`](.cursor/mcp.json) |
+| **MCP + HTTP** | `python -m app.main --http` → `/mcp` and `POST /ask` |
 
-- MCP: `http://127.0.0.1:8000/mcp` (no trailing slash)
-- SSE: `http://127.0.0.1:8000/ask/stream`
+Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: `HTTP_HOST`, `HTTP_PORT`, `LLM_MODEL`, … — see [`.env.example`](.env.example).
 
-Tools: `ask_repo` (buffered), `ask_repo_stream` (MCP logs). Curl examples: [`docs/smoke-test.md`](docs/smoke-test.md).
+## Allowlist
 
-## Response
+Edit `ALLOWED_REPOS` in [`app/repo_allowlist.py`](app/repo_allowlist.py) and restart the server.
 
-`ok`, `repos`, `answer` (with `[1]` cites), `citations` (GitHub URLs), `follow_up_questions`, `latency_ms`, `usage`.
+Today: **9** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md) for `owner/name` rules.
 
-## Allowlist (`tmp.md`)
+## MCP tool: `ask_repo`
 
-`layer-web-v1`, `layer-gateway-api-v1`, `layer-orchestrator-v1`, `layer-rag-query-v1`, `layer-gateway-inference-v1`, `layer-gateway-embed-v1`, `layer-gateway-reranker-v1`, `layer-rag-ingest-v1`, `k3s`
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `question` | yes | — | Natural-language question |
+| `repo` | no | all allowlisted | Short name or `owner/name` |
+| `stream` | no | `false` | `true` → progress + `answer_delta` logs; same final JSON |
+| `request_id` | no | env / UUID | `X-Request-Id` on gateway |
+| `session_id` | no | env / UUID | `X-Session-Id` |
+| `trace_id` | no | env / null | `X-Trace-Id` when set |
+| `conversation_id` | no | `conv_<hex>` | Gateway thread id |
+
+`ask_repo_stream` is an alias for `ask_repo` with `stream: true`.
+
+### HTTP `POST /ask`
+
+Correlation and user context via **headers** (`X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …). Set `"stream": true` or `Accept: text/event-stream` for SSE. See [smoke-test.md](docs/smoke-test.md) §5.
+
+### MCP over HTTP (`--http`)
+
+JSON-RPC on `POST /mcp` (no trailing slash). `tools/call` → `ask_repo`.
+
+### Response fields
+
+`ok`, `repos`, `answer`, `citations`, `follow_up_questions`, `latency_ms`, `usage`, `request_id`, `session_id`, `trace_id`, `conversation_id`.
+
+## Project layout
+
+```text
+app/
+├── main.py            # entry (stdio / --http MCP)
+├── mcp_server.py      # FastMCP instance
+├── tools.py           # ask_repo MCP tools
+├── http_routes.py     # POST /ask
+├── repo_allowlist.py  # ALLOWED_REPOS
+├── allowlist.py       # resolve_repo / resolve_repos
+├── pipeline.py        # ask_repo_impl
+├── streaming.py       # MCP stream consumer
+├── github_client.py   # README + code search
+├── llm.py             # gateway chat / stream
+├── correlation.py     # ids for MCP + gateway
+├── config.py          # env, prompts
+└── citations.py       # [n] sources
+```
 
 ## Cursor
 
-Enable **layer-github** in MCP ([`.cursor/mcp.json`](.cursor/mcp.json)). Example: `Use ask_repo: What is the whole project design?`
+Enable MCP server **layer-github**. Examples:
 
-## Docker Hub
+- `Use ask_repo: What is the whole project design?`
+- `Use ask_repo with stream true on layer-orchestrator-v1: how does routing work?`
 
-CI pushes on every push to `main` (see [`.github/workflows/docker-push.yml`](.github/workflows/docker-push.yml)).
-
-**Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (Docker Hub access token).
-
-**Images:** `<username>/layer-mcp-github:latest` and `<username>/layer-mcp-github:<git-sha>`
-
-**Run published image:**
+## Docker
 
 ```bash
 docker pull YOUR_DOCKERHUB_USER/layer-mcp-github:latest
 docker run -p 8000:8000 --env-file .env YOUR_DOCKERHUB_USER/layer-mcp-github:latest
 ```
 
-**Build locally:**
-
-```bash
-docker compose up --build
-# or: docker build -t layer-mcp-github . && docker run -p 8000:8000 --env-file .env layer-mcp-github
-```
-
-`LLM_GATEWAY_BASE_URL` must be reachable from the container (LAN IP, cluster DNS, or `host.docker.internal`).
+Image runs `python -m app.main --http` (MCP on port **8000**). Gateway URL must be reachable from the container.
 
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| Empty HTTP body | Use `/mcp` not `/mcp/` |
-| No `answer` | Set `LLM_GATEWAY_BASE_URL` in `.env`; restart server |
-| Slow | Default hits 9 repos; add `"repo"` to narrow |
+| Empty curl body | Use `/mcp` not `/mcp/` |
+| No `answer` | `LLM_GATEWAY_BASE_URL` in `.env`; restart server |
+| `repo not allowed` | Name in `ALLOWED_REPOS`; owner = `GITHUB_OWNER` |
+| Slow default query | 9 repos; pass `"repo"` to narrow |
+| Stale behavior | Restart after code changes |
