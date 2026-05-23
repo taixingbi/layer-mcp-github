@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 from starlette.routing import Route
 
 from app.config import HTTP_HOST, HTTP_PORT, MCP_HTTP_PATH
@@ -21,6 +21,14 @@ from .http import (
     is_streaming_tools_call,
     mcp_streaming_response,
     replay_request,
+)
+from .jsonrpc import (
+    INVALID_PARAMS,
+    INVALID_REQUEST,
+    PARSE_ERROR,
+    SERVER_ERROR,
+    error_response,
+    request_id_from,
 )
 from .ops import health, metrics, ready, version
 from .server import mcp
@@ -59,21 +67,24 @@ class McpStreamMiddleware(BaseHTTPMiddleware):
         try:
             body = json.loads(body_bytes)
         except json.JSONDecodeError:
-            return JSONResponse({"detail": "invalid JSON body"}, status_code=400)
+            return error_response(None, PARSE_ERROR, "Parse error")
 
         if not isinstance(body, dict):
-            return JSONResponse({"detail": "body must be a JSON object"}, status_code=400)
+            return error_response(None, INVALID_REQUEST, "Invalid Request")
+
+        rpc_id = request_id_from(body)
+        if body.get("jsonrpc") != "2.0":
+            return error_response(rpc_id, INVALID_REQUEST, "Invalid Request")
 
         if is_streaming_tools_call(body):
             if not accepts_event_stream(request):
-                return JSONResponse(
-                    {
-                        "detail": (
-                            "tools/call with stream:true requires Accept: text/event-stream "
-                            "(the default MCP handler only accepts application/json)"
-                        )
-                    },
-                    status_code=406,
+                return error_response(
+                    rpc_id,
+                    SERVER_ERROR,
+                    (
+                        "tools/call with stream:true requires Accept: text/event-stream "
+                        "(the default MCP handler only accepts application/json)"
+                    ),
                 )
             return mcp_streaming_response(request, body)
 

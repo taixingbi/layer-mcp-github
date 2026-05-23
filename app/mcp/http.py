@@ -20,6 +20,8 @@ from app.observability.correlation import (
 )
 from app.observability.logging_config import logger
 
+from .jsonrpc import INVALID_PARAMS, request_id_from, sse_error_frame
+
 STREAM_TOOLS = frozenset({"ask_repo", "ask_repo_stream"})
 
 
@@ -84,7 +86,13 @@ async def mcp_tools_call_sse(
     body: dict[str, Any],
 ) -> AsyncIterator[str]:
     """Run ask_repo streaming and remap SSE events for MCP HTTP clients."""
-    repo, question, args = parse_tools_call_arguments(body)
+    rpc_id = request_id_from(body)
+    try:
+        repo, question, args = parse_tools_call_arguments(body)
+    except ValueError as exc:
+        yield sse_error_frame(rpc_id, INVALID_PARAMS, str(exc))
+        return
+
     extra = tools_call_stream_kwargs(request, args)
     params = body.get("params") or {}
     tool_name = str(params.get("name") or "ask_repo")
@@ -100,6 +108,7 @@ async def mcp_tools_call_sse(
         http_method=request.method,
         http_path=request.url.path.rstrip("/") or MCP_HTTP_PATH,
         tool_name=tool_name,
+        jsonrpc_id=rpc_id,
         **extra,
     ):
         yield remap_frame_for_mcp_client(frame)

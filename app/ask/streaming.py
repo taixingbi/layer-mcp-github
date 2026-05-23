@@ -43,8 +43,11 @@ async def stream_ask_repo_events(
     http_method: str = "-",
     http_path: str = "-",
     tool_name: str = "ask_repo",
+    jsonrpc_id: str | int | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE frames for ask_repo: meta, status, answer_delta, done, or error."""
+    from app.mcp.jsonrpc import INTERNAL_ERROR, INVALID_PARAMS, sse_error_frame
+
     rid, sid, tid, conv = resolve_correlation(
         request_id=request_id,
         session_id=session_id,
@@ -52,9 +55,14 @@ async def stream_ask_repo_events(
         conversation_id=conversation_id_arg,
     )
 
-    async def _emit_error(msg: str) -> AsyncIterator[str]:
+    async def _emit_error(msg: str, *, code: int = INVALID_PARAMS) -> AsyncIterator[str]:
         log_ask_fail(msg, tool_name=tool_name, stream=True)
-        yield sse_format("error", error_payload(msg, repo, request_id=rid, session_id=sid, trace_id=tid, conversation_id=conv))
+        yield sse_error_frame(
+            jsonrpc_id,
+            code,
+            msg,
+            data=error_payload(msg, repo, request_id=rid, session_id=sid, trace_id=tid, conversation_id=conv),
+        )
 
     with bind_ask_context(
         request_id=rid,
@@ -155,7 +163,8 @@ async def stream_ask_repo_events(
 
         except (httpx.HTTPError, ValueError) as e:
             log_ask_exception(e, stream=True)
-            yield sse_format("error", {"ok": False, "error": httpx_error_message(e)})
+            msg = httpx_error_message(e)
+            yield sse_error_frame(jsonrpc_id, INTERNAL_ERROR, msg)
             return
 
         result = finish_ask_repo_result(
@@ -224,7 +233,11 @@ async def ask_repo_mcp_stream(
                 if text:
                     await ctx.info(json.dumps({"type": "answer_delta", "text": text}))
             elif event == "error":
-                await ctx.error(data.get("error", "stream error"))
+                err = data.get("error")
+                msg = err.get("message", "stream error") if isinstance(err, dict) else str(
+                    data.get("error", "stream error")
+                )
+                await ctx.error(msg)
                 return data
 
         if event == "done":

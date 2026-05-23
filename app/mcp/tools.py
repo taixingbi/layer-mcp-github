@@ -12,6 +12,7 @@ from app.ask.pipeline import ask_repo_impl
 from app.ask.streaming import ask_repo_mcp_stream
 
 from .server import mcp
+from .tools_helpers import ensure_tool_success
 
 
 def _correlation_kwargs(
@@ -53,7 +54,7 @@ async def ask_repo(
         conversation_id=conversation_id,
     )
     if stream:
-        return await ask_repo_mcp_stream(
+        result = await ask_repo_mcp_stream(
             repo,
             question,
             ctx=ctx,
@@ -61,8 +62,9 @@ async def ask_repo(
             tool_name="ask_repo",
             **corr,
         )
+        return ensure_tool_success(result)
 
-    return await anyio.to_thread.run_sync(
+    result = await anyio.to_thread.run_sync(
         partial(
             ask_repo_impl,
             repo,
@@ -74,6 +76,7 @@ async def ask_repo(
             **corr,
         )
     )
+    return ensure_tool_success(result)
 
 
 @mcp.tool()
@@ -87,7 +90,7 @@ async def ask_repo_stream(
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     """Alias for ask_repo(stream=true). Prefer ask_repo with stream in arguments."""
-    return await ask_repo_mcp_stream(
+    result = await ask_repo_mcp_stream(
         repo,
         question,
         ctx=ctx,
@@ -99,3 +102,4 @@ async def ask_repo_stream(
             conversation_id=conversation_id,
         ),
     )
+    return ensure_tool_success(result)

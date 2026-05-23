@@ -37,7 +37,7 @@ cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
 | Mode | Command |
 |------|---------|
 | **Cursor** (stdio MCP) | `python -m app.main` — [`.cursor/mcp.json`](.cursor/mcp.json) |
-| **MCP over HTTP** (curl) | `python -m app.main --http` → `POST /mcp`; ops: `/health`, `/ready`, `/metrics`, `/version` |
+| **MCP over HTTP** (curl) | `python -m app.main --http` → `POST /v1/mcp`; ops: `/health`, `/ready`, `/metrics`, `/version` |
 
 Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: `HTTP_HOST`, `HTTP_PORT`, `LLM_MODEL`, … — see [`.env.example`](.env.example).
 
@@ -55,7 +55,7 @@ Today: **10** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 |----------|----------|---------|-------------|
 | `question` | yes | — | Natural-language question |
 | `repo` | no | all allowlisted | Short name or `owner/name` |
-| `stream` | no | `false` | `true` → SSE on `/mcp` when `Accept: text/event-stream` |
+| `stream` | no | `false` | `true` → SSE on `/v1/mcp` when `Accept: text/event-stream` |
 | `request_id` | no | env / UUID | Forwarded as `X-Request-Id` |
 | `session_id` | no | env / UUID | Forwarded as `X-Session-Id` |
 | `trace_id` | no | env / null | Forwarded as `X-Trace-Id` when set |
@@ -65,12 +65,12 @@ Today: **10** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 
 ### MCP over HTTP (`--http`)
 
-`POST /mcp` (no trailing slash):
+`POST /v1/mcp` (no trailing slash):
 
 - **Buffered:** `Accept: application/json`, `"stream": false` → JSON-RPC `structuredContent`
 - **Real SSE:** `Accept: text/event-stream` **and** `"stream": true` → `meta` / `delta` / `done` (smoke-test §4)
 
-Optional headers on `/mcp`: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …
+Optional headers on `/v1/mcp`: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …
 
 ### Response fields
 
@@ -110,6 +110,6 @@ Runs `python -m app.main --http` (MCP on port **8000**). Image tags match [layer
 | Issue | Fix |
 |-------|-----|
 | Port in use | `lsof -ti :8000 \| xargs kill -9` then restart |
-| Empty curl body | `/mcp` not `/mcp/` |
+| Empty curl body | `/v1/mcp` not `/v1/mcp/` |
 | No `answer` | `LLM_GATEWAY_BASE_URL` in `.env` |
 | MCP stream JSON error | Restart server; use `Accept: text/event-stream` + `stream: true` |
