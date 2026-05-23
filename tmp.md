@@ -24,3 +24,14 @@ curl -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
         "conversation_id": "conv_smoke_1"
     }
   }' | jq .
+
+
+
+
+  curl -s http://127.0.0.1:8000/health | jq .
+curl -s http://127.0.0.1:8000/version | jq .
+curl -s http://127.0.0.1:8000/ready | jq .
+curl -s http://127.0.0.1:8000/metrics | head
+
+
+health version ready metrics

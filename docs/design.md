@@ -32,7 +32,7 @@ GitHub     LLM gateway
 | `config.py` | Env, ports, retrieval limits |
 | `mcp/app.py` | Starlette app, `/mcp`, ops routes, SSE middleware |
 | `mcp/ops.py` | `/health`, `/ready`, `/metrics`, `/version` |
-| `version.py` | `VERSION` / `BUILD_VERSION` / `GIT_SHA` env |
+| `version.py` | `pyproject.toml` version; optional `VERSION` env override |
 | `mcp/http.py` | Stream detection + SSE generator |
 | `mcp/server.py` | FastMCP |
 | `mcp/tools.py` | `ask_repo`, `ask_repo_stream` |
