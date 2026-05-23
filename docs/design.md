@@ -4,14 +4,14 @@
 
 MCP server for natural-language Q&A over allowlisted GitHub repos, with LLM synthesis and citations.
 
-**MCP** on stdio (Cursor) or `POST /mcp` (`--http`). **Ops** routes on HTTP only: `/health`, `/ready`, `/metrics`, `/version`. No REST `/ask`.
+**MCP** on stdio (Cursor) or `POST /v1/mcp` (`--http`). **Ops** routes on HTTP only: `/health`, `/ready`, `/metrics`, `/version`. No REST `/ask`.
 
 ## Architecture
 
 ```text
 Client
   ├─ Cursor (stdio)     python -m app.main
-  └─ curl               python -m app.main --http  →  POST /mcp
+  └─ curl               python -m app.main --http  →  POST /v1/mcp
         │
         ▼
    McpStreamMiddleware (SSE tools/call)
@@ -29,8 +29,8 @@ GitHub     LLM gateway
 | Path | Role |
 |------|------|
 | `main.py` | Entry |
-| `config.py` | Env, ports, retrieval limits |
-| `mcp/app.py` | Starlette app, `/mcp`, ops routes, SSE middleware |
+| `config.py` | Env, ports, `MCP_HTTP_PATH` (`/v1/mcp`), retrieval limits |
+| `mcp/app.py` | Starlette app, `/v1/mcp`, ops routes, SSE middleware |
 | `mcp/ops.py` | `/health`, `/ready`, `/metrics`, `/version` |
 | `version.py` | Reads `[project].version` from installed package (set in `pyproject.toml`) |
 | `mcp/http.py` | Stream detection + SSE generator |
@@ -46,7 +46,7 @@ GitHub     LLM gateway
 | `allowlist/resolve.py` | `resolve_repos` |
 | `clients/github.py` | README + code search |
 | `clients/llm.py` | Gateway |
-| `observability/correlation.py` | Ids + optional `X-User-*` on `/mcp` |
+| `observability/correlation.py` | Ids + optional `X-User-*` on `/v1/mcp` |
 | `observability/logging_config.py` | stderr JSON logger `layer_mcp.github` |
 | `observability/request_context.py` | contextvars for log correlation |
 | `observability/log_context.py` | bind context + latency `extra` helpers |
@@ -56,8 +56,8 @@ GitHub     LLM gateway
 | Mode | Behavior |
 |------|----------|
 | stdio + `stream: true` | MCP progress + logs; final JSON |
-| HTTP `/mcp` + SSE Accept + `stream: true` | `meta`, `delta`, `done` events |
-| HTTP `/mcp` buffered | JSON-RPC `structuredContent` |
+| HTTP `/v1/mcp` + SSE Accept + `stream: true` | `meta`, `delta`, `done` events |
+| HTTP `/v1/mcp` buffered | JSON-RPC `structuredContent` |
 
 ## Observability
 

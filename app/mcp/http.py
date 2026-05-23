@@ -1,4 +1,4 @@
-"""POST /mcp with real SSE when Accept: text/event-stream and tools/call stream=true."""
+"""POST /v1/mcp with real SSE when Accept: text/event-stream and tools/call stream=true."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
+from app.config import MCP_HTTP_PATH
 from app.ask.sse import remap_frame_for_mcp_client
 from app.ask.streaming import stream_ask_repo_events
 from app.observability.correlation import (
@@ -97,7 +98,7 @@ async def mcp_tools_call_sse(
         repo,
         question,
         http_method=request.method,
-        http_path=request.url.path.rstrip("/") or "/mcp",
+        http_path=request.url.path.rstrip("/") or MCP_HTTP_PATH,
         tool_name=tool_name,
         **extra,
     ):

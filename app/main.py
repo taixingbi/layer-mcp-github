@@ -7,7 +7,7 @@ import app.mcp.tools  # noqa: F401 — register tools
 from app.allowlist import ALLOWED_REPOS, allowed_short_names, resolve_repo, resolve_repos
 from app.ask.pipeline import ask_repo_impl
 from app.clients.llm import llm_gateway_base
-from app.config import HTTP_PORT
+from app.config import HTTP_PORT, MCP_HTTP_PATH
 from app.mcp.server import mcp
 
 __all__ = [
@@ -32,7 +32,7 @@ def _run_server() -> None:
         llm = llm_gateway_base() or "(not set — ask_repo will fail)"
         default_repos = allowed_short_names()
         base = f"http://127.0.0.1:{HTTP_PORT}"
-        print(f"MCP {base}/mcp  (stream: Accept SSE + stream:true)", flush=True)
+        print(f"MCP {base}{MCP_HTTP_PATH}  (stream: Accept SSE + stream:true)", flush=True)
         print(f"Ops  {base}/health  {base}/ready  {base}/metrics  {base}/version", flush=True)
         print(f"LLM gateway: {llm}", flush=True)
         print(f"Default repos ({len(default_repos)}): {', '.join(default_repos)}", flush=True)

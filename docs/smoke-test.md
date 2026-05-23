@@ -47,12 +47,12 @@ curl -s -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  http://127.0.0.1:8000/mcp | jq -r '.result.tools[].name' | sort
+  http://127.0.0.1:8000/v1/mcp | jq -r '.result.tools[].name' | sort
 ```
 
 **Pass:** `ask_repo`, `ask_repo_stream`.
 
-Use `/mcp` not `/mcp/`.
+Use `/v1/mcp` not `/v1/mcp/`.
 
 ---
 
@@ -63,7 +63,7 @@ curl -s --max-time 120 -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"introduce this huntAi project","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
-  http://127.0.0.1:8000/mcp | jq '.result.structuredContent | {ok, answer, citations}'
+  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {ok, answer, citations}'
 ```
 
 **Pass:** `ok: true`, non-empty `answer` and `citations`.
@@ -75,7 +75,7 @@ curl -s --max-time 120 -X POST \
 Requires `Accept: text/event-stream` and `"stream": true` on `ask_repo` (or `ask_repo_stream`). Events: `meta`, `status`, `delta`, `done`.
 
 ```bash
-curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
+curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -H "X-Request-Id: req-mcp-stream-1" \
@@ -114,7 +114,7 @@ curl -s -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":"smoke-corr","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"One sentence.","stream":false}}}' \
-  http://127.0.0.1:8000/mcp | jq '.result.structuredContent | {request_id, session_id, trace_id, conversation_id}'
+  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {request_id, session_id, trace_id, conversation_id}'
 ```
 
 **Pass:** `request_id`, `session_id`, `conversation_id` non-empty strings; `trace_id` is `null` when not passed in arguments.
@@ -142,7 +142,7 @@ python3 -c "from app.allowlist import ALLOWED_REPOS; print('expect', len(ALLOWED
 ```
 
 ```bash
-curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
+curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -H "X-Request-Id: req-mcp-stream-1" \
@@ -173,7 +173,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/mcp \
 
 ## Server logs
 
-During §3–4 expect GitHub readme/search and `POST .../v1/chat/completions` → `200 OK`. §4 uses SSE on `/mcp` (not JSON-RPC envelope).
+During §3–4 expect GitHub readme/search and `POST .../v1/chat/completions` → `200 OK`. §4 uses SSE on `/v1/mcp` (not JSON-RPC envelope).
 
 ---
 
@@ -182,11 +182,11 @@ During §3–4 expect GitHub readme/search and `POST .../v1/chat/completions` �
 | Symptom | Check |
 |---------|--------|
 | `[errno 48] address already in use` | `lsof -ti :8000 \| xargs kill -9` then restart |
-| Empty curl body | `/mcp` not `/mcp/` |
+| Empty curl body | `/v1/mcp` not `/v1/mcp/` |
 | `LLM gateway: (not set)` | `.env`; restart server |
 | GitHub 401 | PAT `repo` scope |
 | `repo not allowed` | `ALLOWED_REPOS` + `GITHUB_OWNER` |
-| `Not Acceptable: Client must accept application/json` on `/mcp` stream | Stale server — restart; startup must show `(stream: Accept SSE + stream:true)` |
+| `Not Acceptable: Client must accept application/json` on `/v1/mcp` stream | Stale server — restart; startup must show `(stream: Accept SSE + stream:true)` |
 | Stale payload | Restart `python -m app.main --http` |
 
 See [README](../README.md) · [design.md](design.md) · [schema.md](schema.md).

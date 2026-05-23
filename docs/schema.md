@@ -2,7 +2,7 @@
 
 Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](../app/mcp/http.py), [`app/mcp/app.py`](../app/mcp/app.py). Runnable checks: [smoke-test.md](smoke-test.md).
 
-**No REST API** — only stdio MCP (Cursor) or `POST /mcp` (streamable-http with `--http`).
+**No REST API** — only stdio MCP (Cursor) or `POST /v1/mcp` (streamable-http with `--http`).
 
 ---
 
@@ -10,8 +10,8 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/mcp` | JSON-RPC (buffered) or SSE (stream) |
-| `GET` / `DELETE` | `/mcp` | MCP streamable-http session |
+| `POST` | `/v1/mcp` | JSON-RPC (buffered) or SSE (stream) |
+| `GET` / `DELETE` | `/v1/mcp` | MCP streamable-http session |
 
 ---
 
@@ -30,7 +30,7 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 |------|----------|---------|-------------|
 | `question` | yes | — | User question |
 | `repo` | no | all allowlisted | Short name or `owner/name` |
-| `stream` | no | `false` | `true` → SSE on HTTP `/mcp` when Accept allows |
+| `stream` | no | `false` | `true` → SSE on HTTP `/v1/mcp` when Accept allows |
 | `request_id` | no | env / UUID | `X-Request-Id` to gateway |
 | `session_id` | no | env / UUID | `X-Session-Id` |
 | `trace_id` | no | env / `null` | `X-Trace-Id` when set |
@@ -46,7 +46,7 @@ JSON-RPC result with `.result.structuredContent`:
 
 ---
 
-## Real SSE on `POST /mcp`
+## Real SSE on `POST /v1/mcp`
 
 When **both** `Accept: text/event-stream` and `tools/call` with `stream: true` (or `ask_repo_stream`):
 

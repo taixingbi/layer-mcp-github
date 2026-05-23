@@ -20,3 +20,4 @@ load_dotenv(ROOT / ".env")
 
 HTTP_HOST = (os.environ.get("HTTP_HOST") or "127.0.0.1").strip()
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8000"))
+MCP_HTTP_PATH = "/v1/mcp"

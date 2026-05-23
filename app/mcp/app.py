@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from app.config import HTTP_HOST, HTTP_PORT
+from app.config import HTTP_HOST, HTTP_PORT, MCP_HTTP_PATH
 from app.observability.logging_config import logger
 from app.observability.request_context import bind_http_context
 
@@ -48,11 +48,11 @@ def _ensure_session_manager() -> None:
 
 
 class McpStreamMiddleware(BaseHTTPMiddleware):
-    """Intercept POST /mcp ask_repo stream before the MCP SDK Accept check."""
+    """Intercept POST MCP path ask_repo stream before the MCP SDK Accept check."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path.rstrip("/") or "/"
-        if path != "/mcp" or request.method != "POST":
+        if path != MCP_HTTP_PATH or request.method != "POST":
             return await call_next(request)
 
         body_bytes = await request.body()
@@ -81,7 +81,7 @@ class McpStreamMiddleware(BaseHTTPMiddleware):
 
 
 async def mcp_endpoint(request: Request) -> Response:
-    """Starlette route: delegate GET/POST/DELETE /mcp to FastMCP streamable HTTP ASGI app."""
+    """Starlette route: delegate GET/POST/DELETE on MCP_HTTP_PATH to FastMCP streamable HTTP."""
     from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 
     _ensure_session_manager()
@@ -100,7 +100,7 @@ def create_mcp_app() -> Starlette:
         Route("/ready", endpoint=ready, methods=["GET"]),
         Route("/metrics", endpoint=metrics, methods=["GET"]),
         Route("/version", endpoint=version, methods=["GET"]),
-        Route("/mcp", endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]),
+        Route(MCP_HTTP_PATH, endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]),
     ]
 
     @asynccontextmanager
