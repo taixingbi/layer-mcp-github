@@ -39,6 +39,8 @@ cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
 
 Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: `HTTP_HOST`, `HTTP_PORT`, `LLM_MODEL`, … — see [`.env.example`](.env.example).
 
+**Version:** edit `[project].version` in [`pyproject.toml`](pyproject.toml), then `pip install -e .` (or rebuild the Docker image). CI tags images `:VERSION` from the same file.
+
 ## Allowlist
 
 Edit `ALLOWED_REPOS` in [`app/allowlist/repos.py`](app/allowlist/repos.py) and restart the server.

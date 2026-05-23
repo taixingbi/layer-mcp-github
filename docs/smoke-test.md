@@ -20,7 +20,7 @@ curl -s http://127.0.0.1:8000/ready | jq .
 curl -s http://127.0.0.1:8000/metrics | head
 ```
 
-**Pass:** `/health` → `{"status":"ok",...}`; `/version` → `version` field; `/ready` → `"status":"ready"` and all `checks` true when `.env` is valid; `/metrics` → Prometheus text including `layer_mcp_github_info`.
+**Pass:** `/health` → `{"status":"ok",...}`; `/version` → `"version"` matches `[project].version` in `pyproject.toml` (after `pip install -e .`); `/ready` → `"status":"ready"` and all `checks` true when `.env` is valid; `/metrics` → Prometheus text including `layer_mcp_github_info`.
 
 ---
 
