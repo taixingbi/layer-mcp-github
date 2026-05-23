@@ -9,6 +9,8 @@ Requires-Dist: httpx>=0.27.0
 Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: prometheus-client>=0.20.0
 Requires-Dist: uvicorn>=0.30.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
 
 # layer-mcp-github
 

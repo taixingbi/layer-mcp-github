@@ -34,3 +34,4 @@ layer_mcp_github_v1.egg-info/SOURCES.txt
 layer_mcp_github_v1.egg-info/dependency_links.txt
 layer_mcp_github_v1.egg-info/requires.txt
 layer_mcp_github_v1.egg-info/top_level.txt
+tests/test_ops.py
