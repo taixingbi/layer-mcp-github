@@ -30,8 +30,8 @@ def llm_api_key() -> str:
 
 
 def llm_max_tokens() -> int:
-    """Default max_tokens for chat completions."""
-    return int(os.environ.get("LLM_MAX_TOKENS", "1024"))
+    """Default max_tokens for ask_repo chat completions (completion length cap)."""
+    return int(os.environ.get("LLM_MAX_TOKENS", "384"))
 
 
 def llm_temperature() -> float:
