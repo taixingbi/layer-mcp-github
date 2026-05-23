@@ -10,8 +10,8 @@ from typing import Any
 
 import httpx
 
-from app.config import FOLLOW_UP_PROMPT
-from app.correlation import UserContext, user_header_values
+from app.ask.prompts import FOLLOW_UP_PROMPT
+from app.observability.correlation import UserContext, user_header_values
 
 
 def llm_gateway_base() -> str:

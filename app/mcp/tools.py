@@ -8,9 +8,25 @@ from typing import Any
 import anyio
 from mcp.server.fastmcp import Context
 
-from app.mcp_server import mcp
-from app.pipeline import ask_repo_impl
-from app.streaming import ask_repo_mcp_stream
+from app.ask.pipeline import ask_repo_impl
+from app.ask.streaming import ask_repo_mcp_stream
+
+from .server import mcp
+
+
+def _correlation_kwargs(
+    *,
+    request_id: str | None,
+    session_id: str | None,
+    trace_id: str | None,
+    conversation_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "request_id": request_id,
+        "session_id": session_id,
+        "trace_id": trace_id,
+        "conversation_id_arg": conversation_id,
+    }
 
 
 @mcp.tool()
@@ -26,21 +42,24 @@ async def ask_repo(
 ) -> dict[str, Any]:
     """Answer a question about allowlisted GitHub repos (retrieve + LLM synthesis).
 
-    Default (no repo): all repos in app/repo_allowlist.py. Set stream=true for token streaming via MCP progress/logs.
+    Default (no repo): all repos in app/allowlist/repos.py. Set stream=true for token streaming via MCP progress/logs.
 
     Returns RAG-style payload: repos, answer, citations, follow_up_questions, latency_ms, usage, correlation ids.
     """
+    corr = _correlation_kwargs(
+        request_id=request_id,
+        session_id=session_id,
+        trace_id=trace_id,
+        conversation_id=conversation_id,
+    )
     if stream:
         return await ask_repo_mcp_stream(
             repo,
             question,
-            request_id=request_id,
-            session_id=session_id,
-            trace_id=trace_id,
-            conversation_id_arg=conversation_id,
             ctx=ctx,
             http_path="stdio",
             tool_name="ask_repo",
+            **corr,
         )
 
     return await anyio.to_thread.run_sync(
@@ -48,14 +67,11 @@ async def ask_repo(
             ask_repo_impl,
             repo,
             question,
-            request_id=request_id,
-            session_id=session_id,
-            trace_id=trace_id,
-            conversation_id_arg=conversation_id,
             http_method="-",
             http_path="stdio",
             stream=False,
             tool_name="ask_repo",
+            **corr,
         )
     )
 
@@ -74,10 +90,12 @@ async def ask_repo_stream(
     return await ask_repo_mcp_stream(
         repo,
         question,
-        request_id=request_id,
-        session_id=session_id,
-        trace_id=trace_id,
-        conversation_id_arg=conversation_id,
         ctx=ctx,
         tool_name="ask_repo_stream",
+        **_correlation_kwargs(
+            request_id=request_id,
+            session_id=session_id,
+            trace_id=trace_id,
+            conversation_id=conversation_id,
+        ),
     )

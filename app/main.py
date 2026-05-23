@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import app.tools  # noqa: F401 — register tools
-from app.allowlist import allowed_short_names, resolve_repo, resolve_repos
+import app.mcp.tools  # noqa: F401 — register tools
+from app.allowlist import ALLOWED_REPOS, allowed_short_names, resolve_repo, resolve_repos
+from app.ask.pipeline import ask_repo_impl
+from app.clients.llm import llm_gateway_base
 from app.config import HTTP_PORT
-from app.llm import llm_gateway_base
-from app.mcp_server import mcp
-from app.pipeline import ask_repo_impl
-from app.repo_allowlist import ALLOWED_REPOS
+from app.mcp.server import mcp
 
 __all__ = [
     "ALLOWED_REPOS",
@@ -25,7 +24,7 @@ def _run_server() -> None:
     """Start stdio MCP or HTTP MCP server after configuring stderr JSON logging."""
     import sys
 
-    from app.logging_config import setup_logging
+    from app.observability.logging_config import setup_logging
 
     setup_logging()
 
@@ -37,7 +36,7 @@ def _run_server() -> None:
         print(f"Default repos ({len(default_repos)}): {', '.join(default_repos)}", flush=True)
         import anyio
 
-        from app.mcp_app import run_mcp_http_server
+        from app.mcp.app import run_mcp_http_server
 
         anyio.run(run_mcp_http_server)
     else:

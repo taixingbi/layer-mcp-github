@@ -10,7 +10,12 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import Context
 
-from app.ask_common import (
+from app.clients.llm import generate_follow_ups, iter_chat_completion_stream
+from app.observability.correlation import UserContext, meta_event_payload, resolve_correlation
+from app.observability.log_context import bind_ask_context
+
+from .common import (
+    chat_messages,
     error_payload,
     httpx_error_message,
     log_ask_done,
@@ -18,15 +23,10 @@ from app.ask_common import (
     log_ask_fail,
     log_ask_github_done,
     log_ask_start,
-    resolve_ask_scope,
-    service_prereq_error,
+    resolve_ask_scope_or_error,
 )
-from app.config import SYSTEM_PROMPT
-from app.correlation import UserContext, meta_event_payload, resolve_correlation
-from app.llm import generate_follow_ups, iter_chat_completion_stream
-from app.log_context import bind_ask_context
-from app.pipeline import finish_ask_repo_result, gather_github_evidence
-from app.sse import parse_sse_frame, sse_format
+from .pipeline import finish_ask_repo_result, gather_github_evidence
+from .sse import parse_sse_frame, sse_format
 
 
 async def stream_ask_repo_events(
@@ -65,15 +65,9 @@ async def stream_ask_repo_events(
         method=http_method,
         path=http_path,
     ):
-        scope, err = resolve_ask_scope(repo)
-        if err is not None:
-            async for frame in _emit_error(err.get("error", "resolve failed")):
-                yield frame
-            return
-
-        prereq = service_prereq_error()
-        if prereq:
-            async for frame in _emit_error(prereq):
+        scope, err_msg = resolve_ask_scope_or_error(repo)
+        if err_msg is not None:
+            async for frame in _emit_error(err_msg):
                 yield frame
             return
 
@@ -123,13 +117,9 @@ async def stream_ask_repo_events(
 
                 yield sse_format("status", {"phase": "chat_stream"})
                 t_llm = time.perf_counter()
-                messages = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_body},
-                ]
                 for kind, payload in iter_chat_completion_stream(
                     client,
-                    messages=messages,
+                    messages=chat_messages(user_body),
                     conversation_id=conv,
                     request_id=rid,
                     session_id=sid,

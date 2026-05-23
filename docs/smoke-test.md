@@ -11,16 +11,16 @@ Startup should print MCP URL, LLM gateway, and default repo list.
 
 ---
 
-## 1. Allowlist (`app/repo_allowlist.py`)
+## 1. Allowlist (`app/allowlist/repos.py`)
 
 ```bash
-python3 -c "from app.repo_allowlist import ALLOWED_REPOS; print(len(ALLOWED_REPOS)); print('\n'.join(ALLOWED_REPOS))"
+python3 -c "from app.allowlist import ALLOWED_REPOS; print(len(ALLOWED_REPOS)); print('\n'.join(ALLOWED_REPOS))"
 ```
 
 **Pass:** expected count (e.g. 9); includes `layer-orchestrator-v1`, `k3s`.
 
 ```bash
-python3 -c "from app.allowlist import resolve_repos; r=resolve_repos(); assert r['ok']; print(len(r['full_names']), r['full_names'])"
+python3 -c "from app.allowlist import resolve_repos; r = resolve_repos(); assert r['ok']; print(len(r['full_names']), r['full_names'])"
 ```
 
 **Pass:** same count under `GITHUB_OWNER` from `.env`.
@@ -125,7 +125,7 @@ curl -s "${LLM_GATEWAY_BASE_URL}/v1/chat/completions" \
 ## 7. Optional — all repos (slow)
 
 ```bash
-python3 -c "from app.repo_allowlist import ALLOWED_REPOS; print('expect', len(ALLOWED_REPOS))"
+python3 -c "from app.allowlist import ALLOWED_REPOS; print('expect', len(ALLOWED_REPOS))"
 ```
 
 ```bash

@@ -1,11 +1,11 @@
 # Log JSON schema (design)
 
-Structured logs for **layer-mcp-github-v1** are emitted by the stdlib logger `layer_mcp.github`, configured in [`app/logging_config.py`](../app/logging_config.py). This document describes the **on-the-wire JSON** shape (one UTF-8 JSON object per line), aligned with [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1/blob/main/docs/log-json-schema.md).
+Structured logs for **layer-mcp-github-v1** are emitted by the stdlib logger `layer_mcp.github`, configured in [`app/observability/logging_config.py`](../app/observability/logging_config.py). This document describes the **on-the-wire JSON** shape (one UTF-8 JSON object per line), aligned with [layer-rag-query-v1](https://github.com/taixingbi/layer-rag-query-v1/blob/main/docs/log-json-schema.md).
 
 ## Goals
 
 - **Machine-parseable**: single-line JSON suitable for `jq`, log agents, or downstream indexing.
-- **Correlation**: tie log lines to MCP / HTTP work via `request_id`, `session_id`, optional `trace_id`, and `conversation_id` from [`app/request_context.py`](../app/request_context.py) (set by [`app/log_context.py`](../app/log_context.py)).
+- **Correlation**: tie log lines to MCP / HTTP work via `request_id`, `session_id`, optional `trace_id`, and `conversation_id` from [`app/observability/request_context.py`](../app/observability/request_context.py) (set by [`app/observability/log_context.py`](../app/observability/log_context.py)).
 - **HTTP hints**: optional `method`, `path`, `status` for `POST /mcp` when context is bound.
 - **No noise**: omit `error` when there is no exception (no `"error": null`).
 
@@ -29,7 +29,7 @@ All keys below are **always present** on normal log lines.
 | `session_id` | string | From request context when `request_id` is set; otherwise `"-"`. On HTTP `/mcp`, from `X-Session-Id` when sent, otherwise server-generated. |
 | `trace_id` | string | From request context when set, else `"-"`. On HTTP `/mcp`, from optional `X-Trace-Id`; forwarded to the LLM gateway when present. |
 | `user_id` | string | From request context when set, else `"-"`. On HTTP `/mcp`, from optional `X-User-Id`. |
-| `conversation_id` | string | From tool args / `X-Conversation-Id` flow; else `"-"`. Resolved in [`app/correlation.py`](../app/correlation.py) and forwarded on gateway chat calls. |
+| `conversation_id` | string | From tool args / `X-Conversation-Id` flow; else `"-"`. Resolved in [`app/observability/correlation.py`](../app/observability/correlation.py) and forwarded on gateway chat calls. |
 | `method` | string | HTTP method from context, or `"-"` (stdio MCP uses `method=-`, `path=stdio`). |
 | `path` | string | HTTP path from context, or `"-"`. |
 | `status` | string | HTTP status from context, or from `logger.info(..., extra={"status": "200"})`, or `"-"`. |
@@ -45,7 +45,7 @@ All keys below are **always present** on normal log lines.
 
 If the `LogRecord` has any of these attributes (via `logger.info(..., extra={...})`), they are **copied onto the JSON object** as top-level keys. They are omitted when not supplied.
 
-Defined allowlist in code (`_EXTRA_JSON_FIELDS` in [`app/logging_config.py`](../app/logging_config.py)):
+Defined allowlist in code (`_EXTRA_JSON_FIELDS` in [`app/observability/logging_config.py`](../app/observability/logging_config.py)):
 
 - `duration_ms` — mirrors `latency_total_ms` on `ask_repo done` / `ask_repo stream done` lines
 - `latency_total_ms`, `latency_github_readme_ms`, `latency_github_search_ms`, `latency_chat_ms`, `latency_follow_up_chat_ms`
@@ -96,7 +96,7 @@ To add new structured fields for dashboards or alerts, extend that tuple in `log
 
 ## Related code
 
-- Formatter and filter: [`app/logging_config.py`](../app/logging_config.py)
-- Context setters: [`app/request_context.py`](../app/request_context.py), [`app/log_context.py`](../app/log_context.py)
-- Log call sites: [`app/pipeline.py`](../app/pipeline.py), [`app/streaming.py`](../app/streaming.py), [`app/mcp_http.py`](../app/mcp_http.py), [`app/mcp_app.py`](../app/mcp_app.py)
+- Formatter and filter: [`app/observability/logging_config.py`](../app/observability/logging_config.py)
+- Context setters: [`app/observability/request_context.py`](../app/observability/request_context.py), [`app/observability/log_context.py`](../app/observability/log_context.py)
+- Log call sites: [`app/ask/pipeline.py`](../app/ask/pipeline.py), [`app/ask/streaming.py`](../app/ask/streaming.py), [`app/mcp/http.py`](../app/mcp/http.py), [`app/mcp/app.py`](../app/mcp/app.py)
 - Startup: [`app/main.py`](../app/main.py) → `setup_logging()`

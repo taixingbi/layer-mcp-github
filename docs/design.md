@@ -26,26 +26,28 @@ GitHub     LLM gateway
 
 ## Modules
 
-| Module | Role |
-|--------|------|
+| Path | Role |
+|------|------|
 | `main.py` | Entry |
-| `mcp_app.py` | Starlette app, `/mcp`, SSE middleware |
-| `mcp_http.py` | Stream detection + SSE generator |
-| `mcp_server.py` | FastMCP |
-| `tools.py` | `ask_repo`, `ask_repo_stream` |
-| `pipeline.py` | Buffered `ask_repo_impl` |
-| `ask_common.py` | Shared validation, logging, buffered LLM |
-| `sse.py` | SSE format/parse/remap |
-| `streaming.py` | SSE event generator + MCP stream consumer |
-| `repo_allowlist.py` | `ALLOWED_REPOS` |
-| `allowlist.py` | `resolve_repos` |
-| `github_client.py` | README + code search |
-| `llm.py` | Gateway |
-| `correlation.py` | Ids + optional `X-User-*` on `/mcp` |
-| `logging_config.py` | stderr JSON logger `layer_mcp.github` |
-| `request_context.py` | contextvars for log correlation |
-| `log_context.py` | bind context + latency `extra` helpers |
-| `citations.py` | `[n]` sources |
+| `config.py` | Env, ports, retrieval limits |
+| `mcp/app.py` | Starlette app, `/mcp`, SSE middleware |
+| `mcp/http.py` | Stream detection + SSE generator |
+| `mcp/server.py` | FastMCP |
+| `mcp/tools.py` | `ask_repo`, `ask_repo_stream` |
+| `ask/pipeline.py` | Buffered `ask_repo_impl` |
+| `ask/common.py` | Shared validation, logging, buffered LLM |
+| `ask/prompts.py` | `SYSTEM_PROMPT`, `FOLLOW_UP_PROMPT` |
+| `ask/sse.py` | SSE format/parse/remap |
+| `ask/streaming.py` | SSE event generator + MCP stream consumer |
+| `ask/citations.py` | `[n]` sources |
+| `allowlist/repos.py` | `ALLOWED_REPOS` |
+| `allowlist/resolve.py` | `resolve_repos` |
+| `clients/github.py` | README + code search |
+| `clients/llm.py` | Gateway |
+| `observability/correlation.py` | Ids + optional `X-User-*` on `/mcp` |
+| `observability/logging_config.py` | stderr JSON logger `layer_mcp.github` |
+| `observability/request_context.py` | contextvars for log correlation |
+| `observability/log_context.py` | bind context + latency `extra` helpers |
 
 ## Streaming
 
@@ -67,5 +69,5 @@ Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.
 
 1. **MCP-only surface** — One protocol; no parallel REST API.
 2. **SSE middleware** — Bypasses MCP SDK `application/json` Accept check for real streaming.
-3. **Allowlist in code** — `app/repo_allowlist.py`.
+3. **Allowlist in code** — `app/allowlist/repos.py`.
 4. **Per-repo code search** — Avoids GitHub multi-repo 422.

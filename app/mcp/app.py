@@ -12,16 +12,17 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from app.config import HTTP_HOST, HTTP_PORT
-from app.logging_config import logger
-from app.mcp_http import (
+from app.observability.logging_config import logger
+from app.observability.request_context import bind_http_context
+
+from .http import (
     accepts_event_stream,
     delegate_to_streamable_mcp,
     is_streaming_tools_call,
     mcp_streaming_response,
     replay_request,
 )
-from app.mcp_server import mcp
-from app.request_context import bind_http_context
+from .server import mcp
 
 
 class HttpLoggingMiddleware(BaseHTTPMiddleware):
@@ -89,7 +90,7 @@ async def mcp_endpoint(request: Request) -> Response:
 
 def create_mcp_app() -> Starlette:
     """Build Starlette app with MCP routes and SSE/logging middleware."""
-    import app.tools  # noqa: F401
+    import app.mcp.tools  # noqa: F401
 
     _ensure_session_manager()
 

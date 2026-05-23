@@ -7,7 +7,18 @@ from typing import Any
 
 import httpx
 
-from app.ask_common import (
+from app.clients.github import fetch_code_hits_multi, fetch_readme
+from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
+from app.observability.correlation import UserContext, resolve_correlation
+from app.observability.log_context import bind_ask_context
+
+from .citations import (
+    build_citations,
+    format_multi_repo_sources,
+    format_sources_for_llm,
+    merge_citations,
+)
+from .common import (
     error_payload,
     httpx_error_message,
     log_ask_done,
@@ -15,20 +26,9 @@ from app.ask_common import (
     log_ask_fail,
     log_ask_github_done,
     log_ask_start,
-    resolve_ask_scope,
+    resolve_ask_scope_or_error,
     run_buffered_llm,
-    service_prereq_error,
 )
-from app.citations import (
-    build_citations,
-    format_multi_repo_sources,
-    format_sources_for_llm,
-    merge_citations,
-)
-from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
-from app.correlation import UserContext, resolve_correlation
-from app.github_client import fetch_code_hits_multi, fetch_readme
-from app.log_context import bind_ask_context
 
 
 def gather_github_evidence(
@@ -165,13 +165,9 @@ def ask_repo_impl(
         method=http_method,
         path=http_path,
     ):
-        scope, err = resolve_ask_scope(repo)
-        if err is not None:
-            return _fail(err.get("error", "resolve failed"))
-
-        prereq = service_prereq_error()
-        if prereq:
-            return _fail(prereq)
+        scope, err_msg = resolve_ask_scope_or_error(repo)
+        if err_msg is not None:
+            return _fail(err_msg)
 
         assert scope is not None
         log_ask_start(scope, tool_name=tool_name, stream=stream, user=user)

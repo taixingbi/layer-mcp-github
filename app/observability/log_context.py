@@ -5,8 +5,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any
 
-from app.correlation import UserContext
-from app.request_context import bind_http_context, bind_request_context
+from app.observability.correlation import UserContext
+from app.observability.request_context import bind_http_context, bind_request_context
 
 
 def latency_log_extra(latency: dict[str, int]) -> dict[str, Any]:

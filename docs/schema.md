@@ -1,6 +1,6 @@
 # MCP contract
 
-Implementation: [`app/tools.py`](../app/tools.py), [`app/mcp_http.py`](../app/mcp_http.py), [`app/mcp_app.py`](../app/mcp_app.py). Runnable checks: [smoke-test.md](smoke-test.md).
+Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](../app/mcp/http.py), [`app/mcp/app.py`](../app/mcp/app.py). Runnable checks: [smoke-test.md](smoke-test.md).
 
 **No REST API** — only stdio MCP (Cursor) or `POST /mcp` (streamable-http with `--http`).
 

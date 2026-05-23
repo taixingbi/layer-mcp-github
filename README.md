@@ -9,7 +9,7 @@ MCP server (**[layer-mcp-github-v1](https://github.com/taixingbi/layer-mcp-githu
 | [log-json-schema.md](docs/log-json-schema.md) | stderr JSON log fields |
 | [smoke-test.md](docs/smoke-test.md) | curl checks for MCP + gateway |
 
-**Default:** omit `repo` → all repos in [`app/repo_allowlist.py`](app/repo_allowlist.py). **Narrow:** `"repo": "layer-orchestrator-v1"` (short name or `owner/name`).
+**Default:** omit `repo` → all repos in [`app/allowlist/repos.py`](app/allowlist/repos.py). **Narrow:** `"repo": "layer-orchestrator-v1"` (short name or `owner/name`).
 
 ## Setup
 
@@ -29,7 +29,7 @@ Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: 
 
 ## Allowlist
 
-Edit `ALLOWED_REPOS` in [`app/repo_allowlist.py`](app/repo_allowlist.py) and restart the server.
+Edit `ALLOWED_REPOS` in [`app/allowlist/repos.py`](app/allowlist/repos.py) and restart the server.
 
 Today: **10** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 
@@ -64,19 +64,12 @@ Optional headers on `/mcp`: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-Use
 
 ```text
 app/
-├── main.py            # entry (stdio / --http)
-├── mcp_server.py      # FastMCP instance
-├── mcp_app.py         # streamable-http + SSE middleware
-├── mcp_http.py        # /mcp SSE tools/call
-├── tools.py           # ask_repo MCP tools
-├── repo_allowlist.py  # ALLOWED_REPOS
-├── pipeline.py        # ask_repo_impl
-├── streaming.py       # event pipeline
-├── github_client.py
-├── llm.py
-├── correlation.py
-├── config.py
-└── citations.py
+├── main.py, config.py
+├── ask/               # pipeline, streaming, citations, prompts, sse
+├── mcp/               # server, app, http, tools
+├── clients/           # github, llm
+├── allowlist/         # repos, resolve
+└── observability/     # correlation, logging, request context
 ```
 
 ## Cursor

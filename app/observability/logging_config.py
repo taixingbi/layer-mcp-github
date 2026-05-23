@@ -10,7 +10,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app.config import ROOT
-from app.request_context import (
+from app.observability.request_context import (
     get_conversation_id,
     get_http_method,
     get_http_path,

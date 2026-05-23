@@ -4,7 +4,7 @@ from mcp.server import FastMCP
 
 from app.config import HTTP_HOST, HTTP_PORT
 
-# Shared FastMCP app: tools registered in app.tools
+# Shared FastMCP app: tools registered in app.mcp.tools
 mcp = FastMCP(
     "layer-mcp-github-v1",
     host=HTTP_HOST,

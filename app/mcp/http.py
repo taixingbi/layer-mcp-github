@@ -9,15 +9,15 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
-from app.correlation import (
+from app.ask.sse import remap_frame_for_mcp_client
+from app.ask.streaming import stream_ask_repo_events
+from app.observability.correlation import (
     parse_http_correlation,
     parse_http_user,
     resolve_conversation_id,
     response_correlation_headers,
 )
-from app.logging_config import logger
-from app.sse import remap_frame_for_mcp_client
-from app.streaming import stream_ask_repo_events
+from app.observability.logging_config import logger
 
 STREAM_TOOLS = frozenset({"ask_repo", "ask_repo_stream"})
 

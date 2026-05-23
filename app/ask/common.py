@@ -8,13 +8,14 @@ from typing import Any
 
 import httpx
 
-from app.allowlist import fail, resolve_repos
-from app.config import SYSTEM_PROMPT
-from app.correlation import UserContext
-from app.github_client import github_token
-from app.llm import chat_completion, generate_follow_ups, llm_gateway_base
-from app.log_context import latency_log_extra, user_log_extra
-from app.logging_config import logger
+from app.allowlist.resolve import fail, resolve_repos
+from app.clients.github import github_token
+from app.clients.llm import chat_completion, generate_follow_ups, llm_gateway_base
+from app.observability.correlation import UserContext
+from app.observability.log_context import latency_log_extra, user_log_extra
+from app.observability.logging_config import logger
+
+from .prompts import SYSTEM_PROMPT
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,25 @@ def resolve_ask_scope(repo: str | None) -> tuple[AskScope | None, dict[str, Any]
         AskScope(full_names, str(resolved["scope"]), len(full_names) > 1),
         None,
     )
+
+
+def resolve_ask_scope_or_error(repo: str | None) -> tuple[AskScope | None, str | None]:
+    """Resolve scope and service prereqs; return ``(scope, None)`` or ``(None, error message)``."""
+    scope, err = resolve_ask_scope(repo)
+    if err is not None:
+        return None, str(err.get("error") or "resolve failed")
+    prereq = service_prereq_error()
+    if prereq:
+        return None, prereq
+    return scope, None
+
+
+def chat_messages(user_body: str) -> list[dict[str, str]]:
+    """OpenAI-style messages for ask_repo chat (system + user with sources)."""
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_body},
+    ]
 
 
 def service_prereq_error() -> str | None:
@@ -177,10 +197,7 @@ def run_buffered_llm(
 ) -> tuple[str, list[str], dict[str, int], dict[str, int], dict[str, int]]:
     """Non-streaming chat + follow-ups; returns answer, follow-ups, latency slice, usages."""
     latency: dict[str, int] = {}
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_body},
-    ]
+    messages = chat_messages(user_body)
 
     t0 = time.perf_counter()
     answer, chat_usage = chat_completion(

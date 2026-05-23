@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from app.repo_allowlist import ALLOWED_REPOS
+from app.allowlist.repos import ALLOWED_REPOS
 
 
 def allowed_short_names() -> list[str]:
