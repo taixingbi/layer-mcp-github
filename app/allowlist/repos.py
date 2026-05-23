@@ -11,4 +11,5 @@ ALLOWED_REPOS: tuple[str, ...] = (
     "layer-gateway-reranker-v1",
     "layer-rag-ingest-v1",
     "k3s",
+    "layer-grafana-loki-central-logger"
 )
