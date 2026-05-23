@@ -22,6 +22,7 @@ from .http import (
     mcp_streaming_response,
     replay_request,
 )
+from .ops import health, metrics, ready, version
 from .server import mcp
 
 
@@ -95,6 +96,10 @@ def create_mcp_app() -> Starlette:
     _ensure_session_manager()
 
     routes: list[Route] = [
+        Route("/health", endpoint=health, methods=["GET"]),
+        Route("/ready", endpoint=ready, methods=["GET"]),
+        Route("/metrics", endpoint=metrics, methods=["GET"]),
+        Route("/version", endpoint=version, methods=["GET"]),
         Route("/mcp", endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]),
     ]
 

@@ -1,6 +1,9 @@
 # layer-mcp-github-v1: MCP streamable-http on port 8000.
 FROM python:3.12-slim
 
+ARG VERSION=dev
+ENV VERSION=${VERSION}
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \

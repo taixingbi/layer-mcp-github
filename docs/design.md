@@ -4,7 +4,7 @@
 
 MCP server for natural-language Q&A over allowlisted GitHub repos, with LLM synthesis and citations.
 
-**MCP only:** stdio (Cursor) or `POST /mcp` (`--http`). No REST `/ask`.
+**MCP** on stdio (Cursor) or `POST /mcp` (`--http`). **Ops** routes on HTTP only: `/health`, `/ready`, `/metrics`, `/version`. No REST `/ask`.
 
 ## Architecture
 
@@ -30,7 +30,9 @@ GitHub     LLM gateway
 |------|------|
 | `main.py` | Entry |
 | `config.py` | Env, ports, retrieval limits |
-| `mcp/app.py` | Starlette app, `/mcp`, SSE middleware |
+| `mcp/app.py` | Starlette app, `/mcp`, ops routes, SSE middleware |
+| `mcp/ops.py` | `/health`, `/ready`, `/metrics`, `/version` |
+| `version.py` | `VERSION` / `BUILD_VERSION` / `GIT_SHA` env |
 | `mcp/http.py` | Stream detection + SSE generator |
 | `mcp/server.py` | FastMCP |
 | `mcp/tools.py` | `ask_repo`, `ask_repo_stream` |
@@ -60,6 +62,13 @@ GitHub     LLM gateway
 ## Observability
 
 Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.md](log-json-schema.md). Key lines: `ask_repo start`, `ask_repo done`, `ask_repo stream *`, `mcp tools/call sse start`, `http request done`. Set `LOG_LEVEL=DEBUG` for more detail.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /health` | Liveness (200 if process up) |
+| `GET /ready` | Readiness: env, `GET /user` GitHub auth, LLM gateway probe (200 or 503) |
+| `GET /metrics` | Prometheus text exposition |
+| `GET /version` | `service` + `version` JSON |
 
 ## Configuration
 

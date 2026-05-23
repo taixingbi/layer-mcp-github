@@ -31,7 +31,9 @@ def _run_server() -> None:
     if "--http" in sys.argv:
         llm = llm_gateway_base() or "(not set — ask_repo will fail)"
         default_repos = allowed_short_names()
-        print(f"MCP http://127.0.0.1:{HTTP_PORT}/mcp  (stream: Accept SSE + stream:true)", flush=True)
+        base = f"http://127.0.0.1:{HTTP_PORT}"
+        print(f"MCP {base}/mcp  (stream: Accept SSE + stream:true)", flush=True)
+        print(f"Ops  {base}/health  {base}/ready  {base}/metrics  {base}/version", flush=True)
         print(f"LLM gateway: {llm}", flush=True)
         print(f"Default repos ({len(default_repos)}): {', '.join(default_repos)}", flush=True)
         import anyio

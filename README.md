@@ -23,7 +23,7 @@ cp .env.example .env   # GITHUB_TOKEN, GITHUB_OWNER, LLM_GATEWAY_BASE_URL
 | Mode | Command |
 |------|---------|
 | **Cursor** (stdio MCP) | `python -m app.main` — [`.cursor/mcp.json`](.cursor/mcp.json) |
-| **MCP over HTTP** (curl) | `python -m app.main --http` → `POST /mcp` only |
+| **MCP over HTTP** (curl) | `python -m app.main --http` → `POST /mcp`; ops: `/health`, `/ready`, `/metrics`, `/version` |
 
 Required env: `GITHUB_TOKEN`, `GITHUB_OWNER`, `LLM_GATEWAY_BASE_URL`. Optional: `HTTP_HOST`, `HTTP_PORT`, `LLM_MODEL`, … — see [`.env.example`](.env.example).
 

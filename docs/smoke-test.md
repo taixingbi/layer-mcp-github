@@ -7,7 +7,20 @@ source venv/bin/activate
 lsof -ti :8000 | xargs kill -9 2>/dev/null; python -m app.main --http
 ```
 
-Startup should print MCP URL, LLM gateway, and default repo list.
+Startup should print MCP URL, ops URLs, LLM gateway, and default repo list.
+
+---
+
+## 0. Ops endpoints (HTTP only)
+
+```bash
+curl -s http://127.0.0.1:8000/health | jq .
+curl -s http://127.0.0.1:8000/version | jq .
+curl -s http://127.0.0.1:8000/ready | jq .
+curl -s http://127.0.0.1:8000/metrics | head
+```
+
+**Pass:** `/health` → `{"status":"ok",...}`; `/version` → `version` field; `/ready` → `"status":"ready"` and all `checks` true when `.env` is valid; `/metrics` → Prometheus text including `layer_mcp_github_info`.
 
 ---
 
