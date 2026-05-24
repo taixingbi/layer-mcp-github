@@ -45,7 +45,7 @@ async def ask_repo(
 
     Default (no repo): all repos in app/allowlist/repos.py. Set stream=true for token streaming via MCP progress/logs.
 
-    Returns RAG-style payload: repos, answer, citations, follow_up_questions, latency_ms, usage, correlation ids.
+    Returns standard tool payload: meta, answer (text + citations), follow_up_questions, latency_ms, usage, status.
     """
     corr = _correlation_kwargs(
         request_id=request_id,

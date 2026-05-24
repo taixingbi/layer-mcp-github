@@ -19,7 +19,6 @@ from .citations import (
     merge_citations,
 )
 from .common import (
-    error_payload,
     httpx_error_message,
     log_ask_done,
     log_ask_exception,
@@ -28,7 +27,9 @@ from .common import (
     log_ask_start,
     resolve_ask_scope_or_error,
     run_buffered_llm,
+    tool_error_response,
 )
+from .response import build_tool_response
 
 
 def gather_github_evidence(
@@ -36,7 +37,7 @@ def gather_github_evidence(
     full_names: list[str],
     question: str,
     multi: bool,
-) -> tuple[list[dict[str, Any]], str, dict[str, int]]:
+) -> tuple[list[dict[str, Any]], str, dict[str, int], dict[str, str], list[dict[str, str]]]:
     """Fetch READMEs and code search hits; build citations and LLM user message body."""
     latency: dict[str, int] = {}
     scope_label = ", ".join(full_names)
@@ -84,13 +85,16 @@ def gather_github_evidence(
             f"{format_sources_for_llm(citations, readme, code_hits)}"
         )
 
-    return citations, user_body, latency
+    return citations, user_body, latency, readmes, code_hits
 
 
 def finish_ask_repo_result(
     *,
     full_names: list[str],
+    scope: str,
     citations: list[dict[str, Any]],
+    readmes: dict[str, str],
+    code_hits: list[dict[str, str]],
     answer: str,
     follow_ups: list[str],
     latency: dict[str, int],
@@ -101,33 +105,29 @@ def finish_ask_repo_result(
     tid: str | None,
     conv: str,
     t0: float,
+    tool_name: str,
+    user: UserContext | None,
 ) -> dict[str, Any]:
-    """Assemble the RAG-style JSON payload returned by ask_repo tools."""
+    """Assemble the standard tool response payload."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
-    usage_out: dict[str, Any] = {"chat": chat_usage}
-    if follow_usage.get("total_tokens"):
-        usage_out["follow_up_chat"] = follow_usage
-    usage_out["total"] = {
-        "prompt_tokens": chat_usage.get("prompt_tokens", 0) + follow_usage.get("prompt_tokens", 0),
-        "completion_tokens": chat_usage.get("completion_tokens", 0) + follow_usage.get("completion_tokens", 0),
-        "total_tokens": chat_usage.get("total_tokens", 0) + follow_usage.get("total_tokens", 0),
-    }
-    out: dict[str, Any] = {
-        "ok": True,
-        "repos": full_names,
-        "answer": answer,
-        "citations": citations,
-        "follow_up_questions": follow_ups,
-        "latency_ms": latency,
-        "usage": usage_out,
-        "request_id": rid,
-        "session_id": sid,
-        "trace_id": tid,
-        "conversation_id": conv,
-    }
-    if len(full_names) == 1:
-        out["repo"] = full_names[0]
-    return out
+    return build_tool_response(
+        request_id=rid,
+        session_id=sid,
+        trace_id=tid,
+        conversation_id=conv,
+        tool_name=tool_name,
+        user=user,
+        repos=full_names,
+        scope=scope,
+        answer_text=answer,
+        internal_citations=citations,
+        readmes=readmes,
+        code_hits=code_hits,
+        follow_up_questions=follow_ups,
+        internal_latency=latency,
+        chat_usage=chat_usage,
+        follow_usage=follow_usage,
+    )
 
 
 def ask_repo_impl(
@@ -154,7 +154,16 @@ def ask_repo_impl(
 
     def _fail(msg: str, **extra: Any) -> dict[str, Any]:
         log_ask_fail(msg, tool_name=tool_name, stream=stream, **extra)
-        return error_payload(msg, repo, request_id=rid, session_id=sid, trace_id=tid, conversation_id=conv)
+        return tool_error_response(
+            msg,
+            repo=repo,
+            request_id=rid,
+            session_id=sid,
+            trace_id=tid,
+            conversation_id=conv,
+            tool_name=tool_name,
+            user=user,
+        )
 
     with bind_ask_context(
         request_id=rid,
@@ -176,7 +185,7 @@ def ask_repo_impl(
 
         try:
             with httpx.Client(timeout=httpx.Timeout(30.0, read=120.0)) as client:
-                citations, user_body, gh_latency = gather_github_evidence(
+                citations, user_body, gh_latency, readmes, code_hits = gather_github_evidence(
                     client, scope.full_names, question, scope.multi
                 )
                 latency.update(gh_latency)
@@ -206,7 +215,10 @@ def ask_repo_impl(
 
         result = finish_ask_repo_result(
             full_names=scope.full_names,
+            scope=scope.scope,
             citations=citations,
+            readmes=readmes,
+            code_hits=code_hits,
             answer=answer,
             follow_ups=follow_ups,
             latency=latency,
@@ -217,6 +229,8 @@ def ask_repo_impl(
             tid=tid,
             conv=conv,
             t0=t0,
+            tool_name=tool_name,
+            user=user,
         )
         log_ask_done(
             scope,

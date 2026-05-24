@@ -8,7 +8,8 @@ from typing import Any
 
 import httpx
 
-from app.allowlist.resolve import fail, resolve_repos
+from app.allowlist import allowed_short_names
+from app.allowlist.resolve import resolve_repos
 from app.clients.github import github_token
 from app.clients.llm import chat_completion, generate_follow_ups, llm_gateway_base
 from app.observability.correlation import UserContext
@@ -16,6 +17,7 @@ from app.observability.log_context import latency_log_extra, user_log_extra
 from app.observability.logging_config import logger
 
 from .prompts import SYSTEM_PROMPT
+from .response import build_tool_error
 
 
 @dataclass(frozen=True)
@@ -227,7 +229,7 @@ def run_buffered_llm(
     return answer, follow_ups, latency, chat_usage, follow_usage
 
 
-def error_payload(
+def tool_error_response(
     msg: str,
     repo: str | None,
     *,
@@ -235,13 +237,18 @@ def error_payload(
     session_id: str,
     trace_id: str | None,
     conversation_id: str,
+    tool_name: str = "ask_repo",
+    user: UserContext | None = None,
 ) -> dict[str, Any]:
-    """Build a standard ``fail()`` dict with correlation ids attached."""
-    return fail(
+    """Standard failed tool response (``status.ok`` false)."""
+    return build_tool_error(
         msg,
-        repo=repo or "",
         request_id=request_id,
         session_id=session_id,
         trace_id=trace_id,
         conversation_id=conversation_id,
+        tool_name=tool_name,
+        user=user,
+        repo=repo or None,
+        allowed=allowed_short_names(),
     )

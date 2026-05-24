@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import AsyncIterator, Callable
+import inspect
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import httpx
 from mcp.server.fastmcp import Context
 
 from app.clients.llm import generate_follow_ups, iter_chat_completion_stream
-from app.observability.correlation import UserContext, meta_event_payload, resolve_correlation
+from app.observability.correlation import UserContext, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
 from .common import (
     chat_messages,
-    error_payload,
     httpx_error_message,
     log_ask_done,
     log_ask_exception,
@@ -24,8 +24,10 @@ from .common import (
     log_ask_github_done,
     log_ask_start,
     resolve_ask_scope_or_error,
+    tool_error_response,
 )
 from .pipeline import finish_ask_repo_result, gather_github_evidence
+from .response import stream_delta_event, stream_meta_event
 from .sse import parse_sse_frame, sse_format
 
 
@@ -39,13 +41,13 @@ async def stream_ask_repo_events(
     conversation_id_arg: str | None = None,
     user: UserContext | None = None,
     on_token: Callable[[str], None] | None = None,
-    on_status: Callable[[str, dict[str, Any]], None] | None = None,
+    on_status: Callable[[str, dict[str, Any]], Awaitable[None] | None] | None = None,
     http_method: str = "-",
     http_path: str = "-",
     tool_name: str = "ask_repo",
     jsonrpc_id: str | int | None = None,
 ) -> AsyncIterator[str]:
-    """Yield SSE frames for ask_repo: meta, status, answer_delta, done, or error."""
+    """Yield SSE: ``meta`` (once), ``delta`` (answer text chunks), ``done`` (full payload)."""
     from app.mcp.jsonrpc import INTERNAL_ERROR, INVALID_PARAMS, sse_error_frame
 
     rid, sid, tid, conv = resolve_correlation(
@@ -55,14 +57,26 @@ async def stream_ask_repo_events(
         conversation_id=conversation_id_arg,
     )
 
+    async def _notify_status(phase: str, data: dict[str, Any]) -> None:
+        if on_status is None:
+            return
+        result = on_status(phase, data)
+        if inspect.isawaitable(result):
+            await result
+
     async def _emit_error(msg: str, *, code: int = INVALID_PARAMS) -> AsyncIterator[str]:
         log_ask_fail(msg, tool_name=tool_name, stream=True)
-        yield sse_error_frame(
-            jsonrpc_id,
-            code,
+        err_body = tool_error_response(
             msg,
-            data=error_payload(msg, repo, request_id=rid, session_id=sid, trace_id=tid, conversation_id=conv),
+            repo=repo,
+            request_id=rid,
+            session_id=sid,
+            trace_id=tid,
+            conversation_id=conv,
+            tool_name=tool_name,
+            user=user,
         )
+        yield sse_error_frame(jsonrpc_id, code, msg, data=err_body)
 
     with bind_ask_context(
         request_id=rid,
@@ -84,14 +98,15 @@ async def stream_ask_repo_events(
 
         yield sse_format(
             "meta",
-            meta_event_payload(
-                rid,
-                sid,
-                tid,
-                conv,
-                repos=scope.full_names,
-                repo=scope.full_names[0] if len(scope.full_names) == 1 else None,
+            stream_meta_event(
+                request_id=rid,
+                session_id=sid,
+                trace_id=tid,
+                conversation_id=conv,
+                tool_name=tool_name,
                 user=user,
+                repos=scope.full_names,
+                scope=scope.scope,
             ),
         )
 
@@ -100,30 +115,23 @@ async def stream_ask_repo_events(
         chat_usage: dict[str, int] = {}
         follow_usage: dict[str, int] = {}
         citations: list[dict[str, Any]] = []
+        readmes: dict[str, str] = {}
+        code_hits: list[dict[str, str]] = []
         answer = ""
         follow_ups: list[str] = []
 
         try:
             with httpx.Client(timeout=httpx.Timeout(30.0, read=180.0)) as client:
-                yield sse_format("status", {"phase": "github_readme", "repos": scope.full_names})
-                if on_status:
-                    on_status("github_readme", {"repos": scope.full_names})
+                await _notify_status("github_readme", {"repos": scope.full_names})
 
-                citations, user_body, gh_latency = gather_github_evidence(
+                citations, user_body, gh_latency, readmes, code_hits = gather_github_evidence(
                     client, scope.full_names, question, scope.multi
                 )
                 latency.update(gh_latency)
                 log_ask_github_done(len(citations), gh_latency, stream=True)
-                yield sse_format(
-                    "status",
-                    {
-                        "phase": "github_done",
-                        "latency_ms": gh_latency,
-                        "citation_count": len(citations),
-                    },
-                )
 
-                yield sse_format("status", {"phase": "chat_stream"})
+                await _notify_status("chat_stream", {})
+
                 t_llm = time.perf_counter()
                 for kind, payload in iter_chat_completion_stream(
                     client,
@@ -138,7 +146,7 @@ async def stream_ask_repo_events(
                         text = str(payload)
                         if on_token:
                             on_token(text)
-                        yield sse_format("answer_delta", {"text": text})
+                        yield sse_format("delta", stream_delta_event(text))
                     elif kind == "usage":
                         chat_usage = payload
                     elif kind == "done":
@@ -146,7 +154,8 @@ async def stream_ask_repo_events(
 
                 latency["chat"] = int((time.perf_counter() - t_llm) * 1000)
 
-                yield sse_format("status", {"phase": "follow_up_chat"})
+                await _notify_status("follow_up_chat", {})
+
                 t_llm = time.perf_counter()
                 follow_ups, follow_usage = generate_follow_ups(
                     client,
@@ -164,12 +173,25 @@ async def stream_ask_repo_events(
         except (httpx.HTTPError, ValueError) as e:
             log_ask_exception(e, stream=True)
             msg = httpx_error_message(e)
-            yield sse_error_frame(jsonrpc_id, INTERNAL_ERROR, msg)
+            err_body = tool_error_response(
+                msg,
+                repo=repo,
+                request_id=rid,
+                session_id=sid,
+                trace_id=tid,
+                conversation_id=conv,
+                tool_name=tool_name,
+                user=user,
+            )
+            yield sse_error_frame(jsonrpc_id, INTERNAL_ERROR, msg, data=err_body)
             return
 
         result = finish_ask_repo_result(
             full_names=scope.full_names,
+            scope=scope.scope,
             citations=citations,
+            readmes=readmes,
+            code_hits=code_hits,
             answer=answer,
             follow_ups=follow_ups,
             latency=latency,
@@ -180,6 +202,8 @@ async def stream_ask_repo_events(
             tid=tid,
             conv=conv,
             t0=t0,
+            tool_name=tool_name,
+            user=user,
         )
         log_ask_done(
             scope,
@@ -206,10 +230,25 @@ async def ask_repo_mcp_stream(
     http_path: str = "stdio",
     tool_name: str = "ask_repo",
 ) -> dict[str, Any]:
-    """Consume ``stream_ask_repo_events`` and map frames to MCP progress/logs; return final result."""
-    final: dict[str, Any] = {"ok": False, "error": "stream ended without result"}
+    """Consume stream; MCP progress for phases; return final ``done`` payload only."""
+    from .response import build_tool_error
+
+    final: dict[str, Any] = build_tool_error(
+        "stream ended without result",
+        request_id=request_id or "-",
+        session_id=session_id or "-",
+        trace_id=trace_id,
+        conversation_id=conversation_id_arg or "-",
+        tool_name=tool_name,
+    )
     step = 0
-    total_steps = 6
+    total_steps = 4
+
+    async def _report_phase(phase: str, _data: dict[str, Any]) -> None:
+        nonlocal step
+        if ctx:
+            step += 1
+            await ctx.report_progress(step, total_steps, phase)
 
     async for frame in stream_ask_repo_events(
         repo,
@@ -221,15 +260,13 @@ async def ask_repo_mcp_stream(
         http_method=http_method,
         http_path=http_path,
         tool_name=tool_name,
+        on_status=_report_phase if ctx else None,
     ):
         event, data = parse_sse_frame(frame)
 
         if ctx:
-            if event == "status":
-                step += 1
-                await ctx.report_progress(step, total_steps, data.get("phase", ""))
-            elif event == "answer_delta":
-                text = data.get("text") or ""
+            if event == "delta":
+                text = (data.get("answer") or {}).get("text") or ""
                 if text:
                     await ctx.info(json.dumps({"type": "answer_delta", "text": text}))
             elif event == "error":
@@ -238,11 +275,11 @@ async def ask_repo_mcp_stream(
                     data.get("error", "stream error")
                 )
                 await ctx.error(msg)
-                return data
+                return data.get("data") if isinstance(data.get("data"), dict) else data
 
         if event == "done":
             final = data
         elif event == "error":
-            return data
+            return data.get("data") if isinstance(data.get("data"), dict) else data
 
     return final

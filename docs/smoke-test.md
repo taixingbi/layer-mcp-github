@@ -63,16 +63,16 @@ curl -s --max-time 120 -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"introduce this huntAi project","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
-  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {ok, answer, citations}'
+  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {status, answer: .answer.text, citations: .answer.citations}'
 ```
 
-**Pass:** `ok: true`, non-empty `answer` and `citations`.
+**Pass:** `status.ok: true`, non-empty `answer` and `citations`.
 
 ---
 
 ## 4. MCP — real SSE stream (`Accept: text/event-stream` + `stream: true`)
 
-Requires `Accept: text/event-stream` and `"stream": true` on `ask_repo` (or `ask_repo_stream`). Events: `meta`, `status`, `delta`, `done`.
+Requires `Accept: text/event-stream` and `"stream": true` on `ask_repo` (or `ask_repo_stream`). Events: `meta` (once), `delta` (answer text chunks), `done` (full payload).
 
 ```bash
 curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
@@ -97,12 +97,12 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
   }' | tee /tmp/mcp-stream.txt
 ```
 
-**Pass:** SSE lines with `event: meta`, `event: delta`, `event: done`; `meta` has `request_id` `req-mcp-stream-1`.
+**Pass:** SSE lines with `event: meta`, `event: delta`, `event: done`; first `meta` data has `.meta.request_id` `req-mcp-stream-1`.
 
 **Final JSON from `done`:**
 
 ```bash
-awk '/^event: done$/{p=1} p&&/^data: /{sub(/^data: /,""); print}' /tmp/mcp-stream.txt | tail -1 | jq '{ok, answer: (.answer|length), citations: (.citations|length)}'
+awk '/^event: done$/{p=1} p&&/^data: /{sub(/^data: /,""); print}' /tmp/mcp-stream.txt | tail -1 | jq '{status, answer_len: (.answer.text|length), citations: (.answer.citations|length)}'
 ```
 
 ---
@@ -114,10 +114,10 @@ curl -s -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"jsonrpc":"2.0","id":"smoke-corr","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"One sentence.","stream":false}}}' \
-  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {request_id, session_id, trace_id, conversation_id}'
+  http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent.meta | {request_id, session_id, trace_id, conversation_id}'
 ```
 
-**Pass:** `request_id`, `session_id`, `conversation_id` non-empty strings; `trace_id` is `null` when not passed in arguments.
+**Pass:** `request_id`, `session_id`, `conversation_id` non-empty strings; `trace_id` is `null` when not passed in arguments (under `.meta`).
 
 ---
 

@@ -40,11 +40,18 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 
 ## Buffered response (`stream: false`)
 
-JSON-RPC result with `.result.structuredContent`:
+JSON-RPC result with `.result.structuredContent` (same object as stream `done`):
 
-`ok`, `answer`, `citations`, `follow_up_questions`, `latency_ms`, `usage`, correlation ids, `repos` / `repo`.
+| Top-level | Description |
+|-----------|-------------|
+| `meta` | `request_id`, `session_id`, `trace_id`, `conversation_id`, `user`, `tool` (`name`, `type`: `github`, `version`: `v1`), optional `github` (`repos`, `repo`, `scope`) |
+| `answer` | `text`, `citations[]` with `cite_id`, `source`, `text` |
+| `follow_up_questions` | string array |
+| `latency_ms` | `retrieve_rerank` (README + search), `chat`, `follow_up_chat`, `total` |
+| `usage` | `chat`, optional `follow_up_chat`, `total` token counts |
+| `status` | `ok`, `state` (`completed` or `failed`; `message` on failure) |
 
-On tool failure the handler raises MCP `ToolError` → JSON-RPC **result** with `isError: true` (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling)).
+On tool failure the handler raises MCP `ToolError` → JSON-RPC **result** with `isError: true` and the same shape with `status.ok: false` (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling)).
 
 ---
 
@@ -79,13 +86,14 @@ Implementation: [`app/mcp/jsonrpc.py`](../app/mcp/jsonrpc.py), [`app/mcp/app.py`
 
 When **both** `Accept: text/event-stream` and `tools/call` with `stream: true` (or `ask_repo_stream`):
 
-| Event | Notes |
-|-------|-------|
-| `meta` | Correlation ids; optional `user_*` from `X-User-*` headers |
-| `status` | `github_readme`, `github_done`, `chat_stream`, … |
-| `delta` | `{ "text": "..." }` per token |
-| `done` | Full result object |
-| `error` | JSON-RPC 2.0 error object (`jsonrpc`, `id`, `error.code`, `error.message`; optional `error.data` with correlation ids) |
+| Event | Body | Notes |
+|-------|------|-------|
+| `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `delta` / `done`) |
+| `delta` | `{ "answer": { "text": "..." } }` | Answer text chunks only |
+| `done` | Full tool payload | Same shape as buffered `structuredContent` |
+| `error` | JSON-RPC 2.0 error | `error.data` may contain the failed tool payload (`status.ok: false`) |
+
+Stdio MCP stream uses progress notifications for phases; HTTP SSE does not emit separate `status` events.
 
 Optional headers: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Id`, `X-User-Roles`, `X-User-Groups`, `X-User-Teams`.
 

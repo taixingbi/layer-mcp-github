@@ -70,8 +70,9 @@ def error_response(
 
 
 def tool_failure_message(result: dict[str, Any]) -> str:
-    """Human-readable message from an ask_repo ``fail()`` dict."""
-    return str(result.get("error") or "Tool execution failed")
+    """Human-readable message from a failed tool response."""
+    status = result.get("status") or {}
+    return str(status.get("message") or "Tool execution failed")
 
 
 def sse_error_frame(

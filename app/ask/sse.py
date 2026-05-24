@@ -27,8 +27,5 @@ def parse_sse_frame(frame: str) -> tuple[str, dict[str, Any]]:
 
 
 def remap_frame_for_mcp_client(frame: str) -> str:
-    """Rename ``answer_delta`` events to ``delta`` for HTTP MCP clients."""
-    event, data = parse_sse_frame(frame)
-    if event == "answer_delta":
-        return sse_format("delta", data)
+    """Pass through ``meta`` / ``delta`` / ``done`` frames (already standard-shaped)."""
     return frame
