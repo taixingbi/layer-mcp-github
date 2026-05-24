@@ -12,7 +12,7 @@ from app.allowlist import allowed_short_names
 from app.allowlist.resolve import resolve_repos
 from app.clients.github import github_token
 from app.clients.llm import chat_completion, generate_follow_ups, llm_gateway_base
-from app.observability.correlation import UserContext
+from app.observability.correlation import UserContext, is_new_conversation
 from app.observability.log_context import latency_log_extra, user_log_extra
 from app.observability.logging_config import logger
 
@@ -237,8 +237,9 @@ def tool_error_response(
     session_id: str,
     trace_id: str | None,
     conversation_id: str,
-    tool_name: str = "ask_repo",
     user: UserContext | None = None,
+    question: str | None = None,
+    is_new_conv: bool = False,
 ) -> dict[str, Any]:
     """Standard failed tool response (``status.ok`` false)."""
     return build_tool_error(
@@ -247,8 +248,9 @@ def tool_error_response(
         session_id=session_id,
         trace_id=trace_id,
         conversation_id=conversation_id,
-        tool_name=tool_name,
         user=user,
         repo=repo or None,
         allowed=allowed_short_names(),
+        question=question,
+        is_new_conversation=is_new_conv,
     )

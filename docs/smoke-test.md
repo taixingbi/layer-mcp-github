@@ -102,7 +102,7 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
 **Final JSON from `done`:**
 
 ```bash
-awk '/^event: done$/{p=1} p&&/^data: /{sub(/^data: /,""); print}' /tmp/mcp-stream.txt | tail -1 | jq '{status, answer_len: (.answer.text|length), citations: (.answer.citations|length)}'
+awk '/^event: done$/{p=1} p&&/^data: /{sub(/^data: /,""); print}' /tmp/mcp-stream.txt | tail -1 | jq '{type, status, answer_len: (.answer.text|length), tool: .meta.tool.name}'
 ```
 
 ---

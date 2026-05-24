@@ -12,7 +12,7 @@ import httpx
 from mcp.server.fastmcp import Context
 
 from app.clients.llm import generate_follow_ups, iter_chat_completion_stream
-from app.observability.correlation import UserContext, resolve_correlation
+from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
 from .common import (
@@ -56,6 +56,7 @@ async def stream_ask_repo_events(
         trace_id=trace_id,
         conversation_id=conversation_id_arg,
     )
+    new_conv = is_new_conversation(conversation_id_arg)
 
     async def _notify_status(phase: str, data: dict[str, Any]) -> None:
         if on_status is None:
@@ -73,8 +74,9 @@ async def stream_ask_repo_events(
             session_id=sid,
             trace_id=tid,
             conversation_id=conv,
-            tool_name=tool_name,
             user=user,
+            question=question,
+            is_new_conv=new_conv,
         )
         yield sse_error_frame(jsonrpc_id, code, msg, data=err_body)
 
@@ -103,10 +105,12 @@ async def stream_ask_repo_events(
                 session_id=sid,
                 trace_id=tid,
                 conversation_id=conv,
-                tool_name=tool_name,
                 user=user,
                 repos=scope.full_names,
                 scope=scope.scope,
+                scope_label=scope.scope_label,
+                question=question,
+                is_new_conversation=new_conv,
             ),
         )
 
@@ -180,8 +184,9 @@ async def stream_ask_repo_events(
                 session_id=sid,
                 trace_id=tid,
                 conversation_id=conv,
-                tool_name=tool_name,
                 user=user,
+                question=question,
+                is_new_conv=new_conv,
             )
             yield sse_error_frame(jsonrpc_id, INTERNAL_ERROR, msg, data=err_body)
             return
@@ -189,6 +194,9 @@ async def stream_ask_repo_events(
         result = finish_ask_repo_result(
             full_names=scope.full_names,
             scope=scope.scope,
+            scope_label=scope.scope_label,
+            question=question,
+            is_new_conv=new_conv,
             citations=citations,
             readmes=readmes,
             code_hits=code_hits,
@@ -202,8 +210,8 @@ async def stream_ask_repo_events(
             tid=tid,
             conv=conv,
             t0=t0,
-            tool_name=tool_name,
             user=user,
+            stream_done=True,
         )
         log_ask_done(
             scope,
@@ -212,7 +220,7 @@ async def stream_ask_repo_events(
             user=user,
             citation_count=len(citations),
             follow_up_count=len(follow_ups),
-            latency_ms=result["latency_ms"],
+            latency_ms=latency,
         )
         yield sse_format("done", result)
 
@@ -239,7 +247,8 @@ async def ask_repo_mcp_stream(
         session_id=session_id or "-",
         trace_id=trace_id,
         conversation_id=conversation_id_arg or "-",
-        tool_name=tool_name,
+        question=question,
+        is_new_conversation=is_new_conversation(conversation_id_arg),
     )
     step = 0
     total_steps = 4

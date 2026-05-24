@@ -9,7 +9,7 @@ import httpx
 
 from app.clients.github import fetch_code_hits_multi, fetch_readme
 from app.config import CODE_HITS_MAX, MULTI_REPO_CODE_HITS_MAX
-from app.observability.correlation import UserContext, resolve_correlation
+from app.observability.correlation import UserContext, is_new_conversation, resolve_correlation
 from app.observability.log_context import bind_ask_context
 
 from .citations import (
@@ -92,6 +92,9 @@ def finish_ask_repo_result(
     *,
     full_names: list[str],
     scope: str,
+    scope_label: str,
+    question: str,
+    is_new_conv: bool,
     citations: list[dict[str, Any]],
     readmes: dict[str, str],
     code_hits: list[dict[str, str]],
@@ -105,8 +108,8 @@ def finish_ask_repo_result(
     tid: str | None,
     conv: str,
     t0: float,
-    tool_name: str,
     user: UserContext | None,
+    stream_done: bool = False,
 ) -> dict[str, Any]:
     """Assemble the standard tool response payload."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
@@ -115,10 +118,12 @@ def finish_ask_repo_result(
         session_id=sid,
         trace_id=tid,
         conversation_id=conv,
-        tool_name=tool_name,
         user=user,
         repos=full_names,
         scope=scope,
+        scope_label=scope_label,
+        question=question,
+        is_new_conversation=is_new_conv,
         answer_text=answer,
         internal_citations=citations,
         readmes=readmes,
@@ -127,6 +132,7 @@ def finish_ask_repo_result(
         internal_latency=latency,
         chat_usage=chat_usage,
         follow_usage=follow_usage,
+        stream_done=stream_done,
     )
 
 
@@ -151,6 +157,7 @@ def ask_repo_impl(
         trace_id=trace_id,
         conversation_id=conversation_id_arg,
     )
+    new_conv = is_new_conversation(conversation_id_arg)
 
     def _fail(msg: str, **extra: Any) -> dict[str, Any]:
         log_ask_fail(msg, tool_name=tool_name, stream=stream, **extra)
@@ -161,8 +168,9 @@ def ask_repo_impl(
             session_id=sid,
             trace_id=tid,
             conversation_id=conv,
-            tool_name=tool_name,
             user=user,
+            question=question,
+            is_new_conv=new_conv,
         )
 
     with bind_ask_context(
@@ -216,6 +224,9 @@ def ask_repo_impl(
         result = finish_ask_repo_result(
             full_names=scope.full_names,
             scope=scope.scope,
+            scope_label=scope.scope_label,
+            question=question,
+            is_new_conv=new_conv,
             citations=citations,
             readmes=readmes,
             code_hits=code_hits,
@@ -229,7 +240,6 @@ def ask_repo_impl(
             tid=tid,
             conv=conv,
             t0=t0,
-            tool_name=tool_name,
             user=user,
         )
         log_ask_done(
@@ -239,6 +249,6 @@ def ask_repo_impl(
             user=user,
             citation_count=len(citations),
             follow_up_count=len(follow_ups),
-            latency_ms=result["latency_ms"],
+            latency_ms=latency,
         )
         return result

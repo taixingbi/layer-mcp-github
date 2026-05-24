@@ -44,6 +44,15 @@ def parse_http_user(request: Request) -> UserContext:
     )
 
 
+def is_new_conversation(provided: str | None, *, use_env: bool = True) -> bool:
+    """True when the conversation id was generated (not supplied by caller or env)."""
+    if (provided or "").strip():
+        return False
+    if use_env and (os.environ.get("LLM_CONVERSATION_ID") or "").strip():
+        return False
+    return True
+
+
 def resolve_conversation_id(provided: str | None, *, use_env: bool = True) -> str:
     """Resolve conversation id from argument, env, or generate ``conv_<hex>``."""
     conv = (provided or "").strip()
