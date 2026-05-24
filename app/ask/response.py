@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.config import SNIPPET_MAX
 from app.observability.correlation import UserContext
 
 TOOL_API_VERSION = "v1"
@@ -28,13 +27,25 @@ def _user_meta(user: UserContext | None) -> dict[str, str]:
     }
 
 
-def build_route(scope_label: str, *, logical_tool: str = GITHUB_SEARCH_TOOL) -> dict[str, Any]:
+def route_reason(*, scope: str, multi: bool) -> str:
+    """Human-readable routing reason for ``meta.route``."""
+    if multi or scope == "all":
+        return "Deterministic multi-repo GitHub question"
+    return f"Deterministic GitHub question for {scope}"
+
+
+def build_route(
+    *,
+    scope: str,
+    multi: bool,
+    logical_tool: str = GITHUB_SEARCH_TOOL,
+) -> dict[str, Any]:
     """Deterministic tool route placed under ``meta.route``."""
     return {
         "type": "tool",
         "tool": logical_tool,
         "confidence": 0.99,
-        "reason": f"Deterministic: {scope_label} question",
+        "reason": route_reason(scope=scope, multi=multi),
         "source": "deterministic_rule",
     }
 
@@ -49,13 +60,13 @@ def build_meta(
     repos: list[str] | None = None,
     repo: str | None = None,
     scope: str | None = None,
-    scope_label: str | None = None,
     question: str | None = None,
     is_new_conversation: bool = False,
+    multi: bool = False,
     logical_tool: str = GITHUB_SEARCH_TOOL,
 ) -> dict[str, Any]:
     """``meta`` block for tool responses and stream ``meta`` events."""
-    label = scope_label or scope or repo or logical_tool
+    scope_val = scope or repo or logical_tool
     meta: dict[str, Any] = {
         "request_id": request_id,
         "session_id": session_id,
@@ -63,7 +74,7 @@ def build_meta(
         "conversation_id": conversation_id,
         "is_new_conversation": is_new_conversation,
         "user": _user_meta(user),
-        "route": build_route(label, logical_tool=logical_tool),
+        "route": build_route(scope=scope_val, multi=multi, logical_tool=logical_tool),
         "tool": {
             "name": logical_tool,
             "type": TOOL_TYPE,
@@ -73,12 +84,12 @@ def build_meta(
     if question:
         meta["rewrite"] = question.strip()
     github: dict[str, Any] = {}
+    if scope is not None:
+        github["scope"] = scope
     if repos is not None:
         github["repos"] = repos
     if repo is not None:
         github["repo"] = repo
-    if scope is not None:
-        github["scope"] = scope
     if github:
         meta["github"] = github
     return meta
@@ -114,55 +125,27 @@ def map_latency_ms(
 def map_usage_block(
     chat_usage: dict[str, int],
     follow_usage: dict[str, int],
-    *,
-    logical_tool: str = GITHUB_SEARCH_TOOL,
 ) -> dict[str, Any]:
-    """Nested ``usage``: top-level ``total`` + ``tool_<name>`` with chat / follow_up_chat."""
-    total = {
-        "prompt_tokens": chat_usage.get("prompt_tokens", 0) + follow_usage.get("prompt_tokens", 0),
-        "completion_tokens": chat_usage.get("completion_tokens", 0)
-        + follow_usage.get("completion_tokens", 0),
-        "total_tokens": chat_usage.get("total_tokens", 0) + follow_usage.get("total_tokens", 0),
+    """``usage`` with aggregate token counts only."""
+    return {
+        "total": {
+            "prompt_tokens": chat_usage.get("prompt_tokens", 0) + follow_usage.get("prompt_tokens", 0),
+            "completion_tokens": chat_usage.get("completion_tokens", 0)
+            + follow_usage.get("completion_tokens", 0),
+            "total_tokens": chat_usage.get("total_tokens", 0) + follow_usage.get("total_tokens", 0),
+        },
     }
-    tool_block: dict[str, Any] = {"total": dict(total)}
-    if chat_usage.get("total_tokens"):
-        tool_block["chat"] = dict(chat_usage)
-    if follow_usage.get("total_tokens"):
-        tool_block["follow_up_chat"] = dict(follow_usage)
-    return {"total": total, tool_metrics_key(logical_tool): tool_block}
 
 
-def citations_for_answer(
-    internal: list[dict[str, Any]],
-    readmes: dict[str, str],
-    code_hits: list[dict[str, str]],
-) -> list[dict[str, Any]]:
-    """Map internal citation records to ``cite_id`` / ``source`` / ``text``."""
-    hits_by_key: dict[tuple[str, str], str] = {}
-    for hit in code_hits:
-        repo = hit.get("repo") or ""
-        path = hit.get("path") or ""
-        snippet = (hit.get("snippet") or "").strip()
-        if snippet:
-            hits_by_key[(repo, path)] = snippet[:SNIPPET_MAX]
-
-    out: list[dict[str, Any]] = []
-    for c in internal:
-        cite_id = int(c.get("index") or 0)
-        repo = str(c.get("repo") or "")
-        source = str(c.get("label") or c.get("url") or "")
-        ctype = c.get("type") or ""
-        text = ""
-        if ctype == "repository":
-            readme = (readmes.get(repo) or "").strip()
-            text = readme[:SNIPPET_MAX] if readme else source
-        else:
-            path = ""
-            if "/" in source and not source.startswith("http"):
-                path = source.split("/", 1)[-1]
-            text = hits_by_key.get((repo, path), "") or source
-        out.append({"cite_id": cite_id, "source": source, "text": text})
-    return out
+def citations_for_answer(internal: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map internal citation records to ``cite_id`` / ``source``."""
+    return [
+        {
+            "cite_id": int(c.get("index") or 0),
+            "source": str(c.get("label") or c.get("url") or ""),
+        }
+        for c in internal
+    ]
 
 
 def _status_ok() -> dict[str, Any]:
@@ -182,23 +165,20 @@ def build_tool_response(
     user: UserContext | None,
     repos: list[str],
     scope: str,
-    scope_label: str,
     question: str,
     is_new_conversation: bool,
+    multi: bool,
     answer_text: str,
     internal_citations: list[dict[str, Any]],
-    readmes: dict[str, str],
-    code_hits: list[dict[str, str]],
     follow_up_questions: list[str],
     internal_latency: dict[str, int],
     chat_usage: dict[str, int],
     follow_usage: dict[str, int],
-    stream_done: bool = False,
     logical_tool: str = GITHUB_SEARCH_TOOL,
 ) -> dict[str, Any]:
     """Full tool result (buffered ``structuredContent`` or stream ``done`` event)."""
     repo = repos[0] if len(repos) == 1 else None
-    body: dict[str, Any] = {
+    return {
         "meta": build_meta(
             request_id=request_id,
             session_id=session_id,
@@ -208,23 +188,20 @@ def build_tool_response(
             repos=repos,
             repo=repo,
             scope=scope,
-            scope_label=scope_label,
             question=question,
             is_new_conversation=is_new_conversation,
+            multi=multi,
             logical_tool=logical_tool,
         ),
         "answer": {
             "text": answer_text,
-            "citations": citations_for_answer(internal_citations, readmes, code_hits),
+            "citations": citations_for_answer(internal_citations),
         },
         "follow_up_questions": list(follow_up_questions),
         "latency_ms": map_latency_ms(internal_latency, logical_tool=logical_tool),
-        "usage": map_usage_block(chat_usage, follow_usage, logical_tool=logical_tool),
+        "usage": map_usage_block(chat_usage, follow_usage),
         "status": _status_ok(),
     }
-    if stream_done:
-        body["type"] = "done"
-    return body
 
 
 def build_tool_error(
@@ -249,9 +226,10 @@ def build_tool_error(
         conversation_id=conversation_id,
         user=user,
         repo=repo,
-        scope_label=repo or logical_tool,
+        scope=repo or logical_tool,
         question=question,
         is_new_conversation=is_new_conversation,
+        multi=False,
         logical_tool=logical_tool,
     )
     if allowed is not None:
@@ -275,9 +253,9 @@ def stream_meta_event(
     user: UserContext | None,
     repos: list[str],
     scope: str,
-    scope_label: str,
     question: str,
     is_new_conversation: bool,
+    multi: bool,
     logical_tool: str = GITHUB_SEARCH_TOOL,
 ) -> dict[str, Any]:
     """SSE ``meta`` event body (meta only — no duplicate fields on ``delta`` / ``done``)."""
@@ -292,9 +270,9 @@ def stream_meta_event(
             repos=repos,
             repo=repo,
             scope=scope,
-            scope_label=scope_label,
             question=question,
             is_new_conversation=is_new_conversation,
+            multi=multi,
             logical_tool=logical_tool,
         ),
     }

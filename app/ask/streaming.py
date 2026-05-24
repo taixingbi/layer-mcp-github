@@ -108,9 +108,9 @@ async def stream_ask_repo_events(
                 user=user,
                 repos=scope.full_names,
                 scope=scope.scope,
-                scope_label=scope.scope_label,
                 question=question,
                 is_new_conversation=new_conv,
+                multi=scope.multi,
             ),
         )
 
@@ -194,12 +194,10 @@ async def stream_ask_repo_events(
         result = finish_ask_repo_result(
             full_names=scope.full_names,
             scope=scope.scope,
-            scope_label=scope.scope_label,
+            multi=scope.multi,
             question=question,
             is_new_conv=new_conv,
             citations=citations,
-            readmes=readmes,
-            code_hits=code_hits,
             answer=answer,
             follow_ups=follow_ups,
             latency=latency,
@@ -211,7 +209,6 @@ async def stream_ask_repo_events(
             conv=conv,
             t0=t0,
             user=user,
-            stream_done=True,
         )
         log_ask_done(
             scope,

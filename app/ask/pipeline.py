@@ -92,12 +92,10 @@ def finish_ask_repo_result(
     *,
     full_names: list[str],
     scope: str,
-    scope_label: str,
+    multi: bool,
     question: str,
     is_new_conv: bool,
     citations: list[dict[str, Any]],
-    readmes: dict[str, str],
-    code_hits: list[dict[str, str]],
     answer: str,
     follow_ups: list[str],
     latency: dict[str, int],
@@ -109,7 +107,6 @@ def finish_ask_repo_result(
     conv: str,
     t0: float,
     user: UserContext | None,
-    stream_done: bool = False,
 ) -> dict[str, Any]:
     """Assemble the standard tool response payload."""
     latency["total"] = int((time.perf_counter() - t0) * 1000)
@@ -121,18 +118,15 @@ def finish_ask_repo_result(
         user=user,
         repos=full_names,
         scope=scope,
-        scope_label=scope_label,
         question=question,
         is_new_conversation=is_new_conv,
+        multi=multi,
         answer_text=answer,
         internal_citations=citations,
-        readmes=readmes,
-        code_hits=code_hits,
         follow_up_questions=follow_ups,
         internal_latency=latency,
         chat_usage=chat_usage,
         follow_usage=follow_usage,
-        stream_done=stream_done,
     )
 
 
@@ -224,12 +218,10 @@ def ask_repo_impl(
         result = finish_ask_repo_result(
             full_names=scope.full_names,
             scope=scope.scope,
-            scope_label=scope.scope_label,
+            multi=scope.multi,
             question=question,
             is_new_conv=new_conv,
             citations=citations,
-            readmes=readmes,
-            code_hits=code_hits,
             answer=answer,
             follow_ups=follow_ups,
             latency=latency,

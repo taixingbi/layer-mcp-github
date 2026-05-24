@@ -44,13 +44,12 @@ JSON-RPC result with `.result.structuredContent` (same object as stream `done`):
 
 | Top-level | Description |
 |-----------|-------------|
-| `meta` | Correlation ids, `is_new_conversation`, `user`, `route` (deterministic tool routing), `tool` (`name`: `github_search`, `type`: `github`, `version`: `v1`), `rewrite` (question), optional `github` (`repos`, `repo`, `scope`) |
-| `answer` | `text`, `citations[]` with `cite_id`, `source`, `text` |
+| `meta` | Correlation ids, `is_new_conversation`, `user`, `route`, `tool` (`github_search`), `rewrite`, `github` (`scope`, `repos`, optional `repo`) |
+| `answer` | `text`, `citations[]` with `cite_id` and `source` only |
 | `follow_up_questions` | string array |
-| `latency_ms` | `total` plus `tool_github_search` with `retrieve_rerank`, `chat`, `follow_up_chat`, `total` |
-| `usage` | `total` plus `tool_github_search` with optional `chat` / `follow_up_chat` and nested `total` |
+| `latency_ms` | `total` plus `tool_github_search` breakdown |
+| `usage` | `total` token counts only |
 | `status` | `ok`, `state`, `code` (`ok` / `failed`; `message` on failure) |
-| `type` | `"done"` on stream terminal event only |
 
 On tool failure the handler raises MCP `ToolError` → JSON-RPC **result** with `isError: true` and the same shape with `status.ok: false` (see [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#error-handling)).
 
@@ -91,7 +90,7 @@ When **both** `Accept: text/event-stream` and `tools/call` with `stream: true` (
 |-------|------|-------|
 | `meta` | `{ "meta": { ... } }` | Once at start (no duplicate correlation fields on `delta` / `done`) |
 | `delta` | `{ "answer": { "text": "..." } }` | Answer text chunks only |
-| `done` | Full tool payload | Same as buffered `structuredContent` plus `"type": "done"` |
+| `done` | Full tool payload | Same fields as buffered `structuredContent` (no extra wrapper keys) |
 | `error` | JSON-RPC 2.0 error | `error.data` may contain the failed tool payload (`status.ok: false`) |
 
 Stdio MCP stream uses progress notifications for phases; HTTP SSE does not emit separate `status` events.
@@ -107,7 +106,11 @@ Optional headers: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Id`, `X-
 - [log-json-schema.md](log-json-schema.md)
 - [README.md](../README.md)
 
-## response 
+## Example response
+
+Stream request (all allowlisted repos). MCP returns tool fields under `.result` / `.result.structuredContent`; SSE emits `meta` → `delta` → `done` with the same payload on `done`.
+
+```bash
 curl -N -sS --max-time 120 -X POST http://192.168.86.179:30191/v1/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
@@ -131,147 +134,130 @@ curl -N -sS --max-time 120 -X POST http://192.168.86.179:30191/v1/mcp \
       }
     }
   }'
+```
 
+```json
 {
-  "meta": {
-    "request_id": "req-mcp-stream-1",
-    "session_id": "ses-mcp-stream-1",
-    "trace_id": "trc-mcp-stream-1",
-    "conversation_id": "conv_smoke_1s",
-    "is_new_conversation": false,
-    "user": {
-      "id": "taixing",
-      "roles": "hr",
-      "groups": "engineering",
-      "teams": "rag-platform"
-    },
-    "route": {
-      "type": "tool",
-      "tool": "github_search",
-      "confidence": 0.99,
-      "reason": "Deterministic: HuntAI/layer repo architecture question",
-      "source": "deterministic_rule"
-    },
-    "tool": {
-      "name": "github_search",
-      "type": "github",
-      "version": "v1"
-    },
-    "rewrite": "introduce this huntai project",
-    "github": {
-      "repos": [
-        "taixingbi/layer-mcp-github-v1",
-        "taixingbi/layer-web-v1",
-        "taixingbi/layer-gateway-api-v1",
-        "taixingbi/layer-orchestrator-v1",
-        "taixingbi/layer-rag-query-v1",
-        "taixingbi/layer-gateway-inference-v1",
-        "taixingbi/layer-gateway-embed-v1",
-        "taixingbi/layer-gateway-reranker-v1",
-        "taixingbi/layer-rag-ingest-v1",
-        "taixingbi/k3s",
-        "taixingbi/layer-grafana-loki-central-logger"
-      ],
-      "scope": "all"
-    }
-  },
-  "answer": {
-    "text": "HuntAI is a private AI assistant platform combining a Next.js frontend, FastAPI gateway layer, orchestrator services, GitHub/RAG tools, GPU-aware vLLM inference gateways, Qdrant vector retrieval, and k3s-based infrastructure.\n\nKey components include:\n\n- layer-web-v1: Next.js 15 chat application and frontend UI.\n- layer-gateway-api-v1: FastAPI BFF gateway handling authentication, request normalization, retries, SSE streaming, and orchestrator communication.\n- layer-orchestrator-v1: AI orchestration service coordinating chat completions, routing, and RAG workflows.\n- layer-rag-query-v1: Retrieval-Augmented Generation service using hybrid retrieval and reranking.\n- layer-gateway-inference-v1: GPU-aware routing gateway for distributed vLLM inference.\n- layer-gateway-embed-v1: Embedding gateway for distributed embedding inference.\n- layer-gateway-reranker-v1: Reranker gateway for semantic reranking workloads.\n- layer-rag-ingest-v1: Ingestion pipeline for preparing and indexing RAG documents into Qdrant.\n- k3s: Kubernetes infrastructure and GPU node orchestration.\n- layer-grafana-loki-central-logger: Centralized structured logging pipeline for Grafana Loki observability.\n\nThe overall architecture focuses on scalable AI inference, retrieval-augmented generation, observability, distributed GPU routing, and production-grade AI platform infrastructure.",
-    "citations": [
-      {
-        "cite_id": 1,
-        "source": "layer-mcp-github-v1 README",
-        "text": "# layer-mcp-github ..."
+  "jsonrpc": "2.0",
+  "id": "smoke-1s",
+  "result": {
+    "meta": {
+      "request_id": "req-mcp-stream-1",
+      "session_id": "ses-mcp-stream-1",
+      "trace_id": "trc-mcp-stream-1",
+      "conversation_id": "conv_smoke_1s",
+      "is_new_conversation": false,
+      "user": {
+        "id": "taixing",
+        "roles": "hr",
+        "groups": "engineering",
+        "teams": "rag-platform"
       },
-      {
-        "cite_id": 2,
-        "source": "layer-web-v1 README",
-        "text": "# HuntAI ..."
+      "route": {
+        "type": "tool",
+        "tool": "github_search",
+        "confidence": 0.99,
+        "reason": "Deterministic multi-repo GitHub question",
+        "source": "deterministic_rule"
       },
-      {
-        "cite_id": 3,
-        "source": "layer-gateway-api-v1 README",
-        "text": "# layer-gateway-api-v1 ..."
+      "tool": {
+        "name": "github_search",
+        "type": "github",
+        "version": "v1"
       },
-      {
-        "cite_id": 4,
-        "source": "layer-orchestrator-v1 README",
-        "text": "# layer-orchestrator-v1 ..."
-      },
-      {
-        "cite_id": 5,
-        "source": "layer-rag-query-v1 README",
-        "text": "# layer-rag-query ..."
-      },
-      {
-        "cite_id": 6,
-        "source": "layer-gateway-inference-v1 README",
-        "text": "# layer-gateway-inference-v1 ..."
-      },
-      {
-        "cite_id": 7,
-        "source": "layer-gateway-embed-v1 README",
-        "text": "# layer-gateway-embed-v1 ..."
-      },
-      {
-        "cite_id": 8,
-        "source": "layer-gateway-reranker-v1 README",
-        "text": "# layer-gateway-reranker-v1 ..."
-      },
-      {
-        "cite_id": 9,
-        "source": "layer-rag-ingest-v1 README",
-        "text": "# RAG Ingest Pipeline ..."
-      },
-      {
-        "cite_id": 10,
-        "source": "k3s README",
-        "text": "# k3s server + GPU agents ..."
-      },
-      {
-        "cite_id": 11,
-        "source": "layer-grafana-loki-central-logger README",
-        "text": "# tb-loki-central-logger ..."
+      "rewrite": "introduce this huntAi project",
+      "github": {
+        "scope": "all",
+        "repos": [
+          "taixingbi/layer-mcp-github-v1",
+          "taixingbi/layer-web-v1",
+          "taixingbi/layer-gateway-api-v1",
+          "taixingbi/layer-orchestrator-v1",
+          "taixingbi/layer-rag-query-v1",
+          "taixingbi/layer-gateway-inference-v1",
+          "taixingbi/layer-gateway-embed-v1",
+          "taixingbi/layer-gateway-reranker-v1",
+          "taixingbi/layer-rag-ingest-v1",
+          "taixingbi/k3s",
+          "taixingbi/layer-grafana-loki-central-logger"
+        ]
       }
-    ]
-  },
-  "follow_up_questions": [
-    "How does the orchestrator coordinate RAG and LLM workflows?",
-    "Why use separate inference, embedding, and reranker gateways?",
-    "How does HuntAI implement observability and structured logging?"
-  ],
-  "latency_ms": {
-    "total": 13069,
-    "tool_github_search": {
-      "retrieve_rerank": 3832,
-      "chat": 7893,
-      "follow_up_chat": 1328,
-      "total": 13069
-    }
-  },
-  "usage": {
-    "total": {
-      "prompt_tokens": 580,
-      "completion_tokens": 56,
-      "total_tokens": 636
     },
-    "tool_github_search": {
-      "follow_up_chat": {
-        "prompt_tokens": 580,
-        "completion_tokens": 56,
-        "total_tokens": 636
-      },
+    "answer": {
+      "text": "## Introduction to huntAi Project\n\nThe huntAi project consists of several interconnected components designed to facilitate natural language processing and artificial intelligence applications...",
+      "citations": [
+        {
+          "cite_id": 1,
+          "source": "layer-mcp-github-v1 README"
+        },
+        {
+          "cite_id": 2,
+          "source": "layer-web-v1 README"
+        },
+        {
+          "cite_id": 3,
+          "source": "layer-gateway-api-v1 README"
+        },
+        {
+          "cite_id": 4,
+          "source": "layer-orchestrator-v1 README"
+        },
+        {
+          "cite_id": 5,
+          "source": "layer-rag-query-v1 README"
+        },
+        {
+          "cite_id": 6,
+          "source": "layer-gateway-inference-v1 README"
+        },
+        {
+          "cite_id": 7,
+          "source": "layer-gateway-embed-v1 README"
+        },
+        {
+          "cite_id": 8,
+          "source": "layer-gateway-reranker-v1 README"
+        },
+        {
+          "cite_id": 9,
+          "source": "layer-rag-ingest-v1 README"
+        },
+        {
+          "cite_id": 10,
+          "source": "k3s README"
+        },
+        {
+          "cite_id": 11,
+          "source": "layer-grafana-loki-central-logger README"
+        }
+      ]
+    },
+    "follow_up_questions": [
+      "What is the primary function of the Layer-MCP-GitHub-V1 component?",
+      "Can you explain how the Layer-Orchestrator-V1 manages chat completions?",
+      "Which tools are used for logging in the Layer-Grafana-Loki-Central-Logger component?"
+    ],
+    "latency_ms": {
+      "total": 12683,
+      "tool_github_search": {
+        "retrieve_rerank": 4351,
+        "chat": 6865,
+        "follow_up_chat": 1420,
+        "total": 12683
+      }
+    },
+    "usage": {
       "total": {
-        "prompt_tokens": 580,
-        "completion_tokens": 56,
-        "total_tokens": 636
+        "prompt_tokens": 527,
+        "completion_tokens": 65,
+        "total_tokens": 592
       }
+    },
+    "status": {
+      "ok": true,
+      "state": "completed",
+      "code": "ok"
     }
-  },
-  "status": {
-    "ok": true,
-    "state": "completed",
-    "code": "ok"
-  },
-  "type": "done"
+  }
 }
+```
