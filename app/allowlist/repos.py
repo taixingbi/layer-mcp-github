@@ -9,7 +9,5 @@ ALLOWED_REPOS: tuple[str, ...] = (
     "layer-gateway-inference-v1",
     "layer-gateway-embed-v1",
     "layer-gateway-reranker-v1",
-    "layer-rag-ingest-v1",
-    "k3s",
-    "layer-grafana-loki-central-logger"
+    "huntai-k3s"
 )
