@@ -1,4 +1,4 @@
-"""LLM system and follow-up prompts for ask_repo."""
+"""LLM system and follow-up prompts for github_search."""
 
 SYSTEM_PROMPT = """You answer questions about GitHub repositories using ONLY the numbered Sources below.
 - Cite with bracket indices that match Sources, e.g. [1] for README, [2] for a file.

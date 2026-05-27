@@ -56,7 +56,7 @@ def _ensure_session_manager() -> None:
 
 
 class McpStreamMiddleware(BaseHTTPMiddleware):
-    """Intercept POST MCP path ask_repo stream before the MCP SDK Accept check."""
+    """Intercept POST MCP github_search stream before the MCP SDK Accept check."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path.rstrip("/") or "/"
@@ -82,8 +82,8 @@ class McpStreamMiddleware(BaseHTTPMiddleware):
                     rpc_id,
                     SERVER_ERROR,
                     (
-                        "tools/call with stream:true requires Accept: text/event-stream "
-                        "(the default MCP handler only accepts application/json)"
+                        "github_search streaming requires Accept: text/event-stream "
+                        "(set stream:false for buffered JSON)"
                     ),
                 )
             return mcp_streaming_response(request, body)

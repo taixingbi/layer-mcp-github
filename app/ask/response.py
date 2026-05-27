@@ -1,4 +1,4 @@
-"""Standard ask_repo tool response shape (buffered and stream ``done``)."""
+"""Standard github_search tool response shape (buffered and stream ``done``)."""
 
 from __future__ import annotations
 

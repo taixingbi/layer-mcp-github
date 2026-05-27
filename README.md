@@ -4,7 +4,7 @@ MCP server (**[layer-mcp-github-v1](https://github.com/taixingbi/layer-mcp-githu
 
 | Docs | Contents |
 |------|----------|
-| [schema.md](docs/schema.md) | MCP `ask_repo` contract |
+| [schema.md](docs/schema.md) | MCP `github_search` contract |
 | [design.md](docs/design.md) | Architecture, streaming, config, `app/` layout |
 | [log-json-schema.md](docs/log-json-schema.md) | stderr JSON log fields |
 | [smoke-test.md](docs/smoke-test.md) | curl checks for MCP + gateway |
@@ -35,26 +35,24 @@ Edit `ALLOWED_REPOS` in [`app/allowlist/repos.py`](app/allowlist/repos.py) and r
 
 Today: **10** repos under `GITHUB_OWNER`. See [schema.md](docs/schema.md).
 
-## MCP tool: `ask_repo`
+## MCP tool: `github_search`
 
 | Argument | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `question` | yes | — | Natural-language question |
 | `repo` | no | all allowlisted | Short name or `owner/name` |
-| `stream` | no | `false` | `true` → SSE on `/v1/mcp` when `Accept: text/event-stream` |
+| `stream` | no | `true` | `false` → buffered JSON; `true` (default) → SSE on `/v1/mcp` with `Accept: text/event-stream` |
 | `request_id` | no | env / UUID | Forwarded as `X-Request-Id` |
 | `session_id` | no | env / UUID | Forwarded as `X-Session-Id` |
 | `trace_id` | no | env / null | Forwarded as `X-Trace-Id` when set |
 | `conversation_id` | no | `conv_<hex>` | Gateway thread id |
-
-`ask_repo_stream` is an alias for `ask_repo` with `stream: true`.
 
 ### MCP over HTTP (`--http`)
 
 `POST /v1/mcp` (no trailing slash):
 
 - **Buffered:** `Accept: application/json`, `"stream": false` → JSON-RPC `structuredContent`
-- **Real SSE:** `Accept: text/event-stream` **and** `"stream": true` → `meta` / `delta` / `done` (smoke-test §4)
+- **Real SSE (default):** `Accept: text/event-stream` and omit `stream` (or set `"stream": true`) → `meta` / `delta` / `done` (smoke-test §4)
 
 Optional headers on `/v1/mcp`: `X-Request-Id`, `X-Session-Id`, `X-Trace-Id`, `X-User-Roles`, …
 
@@ -78,8 +76,8 @@ app/
 
 Enable MCP server **layer-mcp-github-v1** (see [`.cursor/mcp.json`](.cursor/mcp.json)). Examples:
 
-- `Use ask_repo: What is the whole project design?`
-- `Use ask_repo with stream true on layer-orchestrator-v1: how does routing work?`
+- `Use github_search: What is the whole project design?`
+- `Use github_search on layer-orchestrator-v1: how does routing work?`
 
 ## Docker
 

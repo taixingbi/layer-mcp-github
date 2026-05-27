@@ -1,4 +1,4 @@
-"""Shared validation, logging, and LLM helpers for ask_repo (buffered + stream)."""
+"""Shared validation, logging, and LLM helpers for github_search (buffered + stream)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from .response import build_tool_error
 
 @dataclass(frozen=True)
 class AskScope:
-    """Resolved allowlist target(s) for one ask_repo invocation."""
+    """Resolved allowlist target(s) for one github_search invocation."""
 
     full_names: list[str]
     scope: str
@@ -57,7 +57,7 @@ def resolve_ask_scope_or_error(repo: str | None) -> tuple[AskScope | None, str |
 
 
 def chat_messages(user_body: str) -> list[dict[str, str]]:
-    """OpenAI-style messages for ask_repo chat (system + user with sources)."""
+    """OpenAI-style messages for github_search chat (system + user with sources)."""
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_body},
@@ -103,14 +103,14 @@ def log_ask_fail(
 ) -> None:
     """Emit a warning line for a failed ask (validation, env, or upstream)."""
     logger.warning(
-        f"ask_repo{' stream' if stream else ''} fail {msg}",
+        f"github_search{' stream' if stream else ''} fail {msg}",
         extra={"ok": False, "tool_name": tool_name, "stream": stream, "error_message": msg, **extra},
     )
 
 
 def log_ask_start(scope: AskScope, *, tool_name: str, stream: bool, user: UserContext | None) -> None:
-    """Log ask_repo / stream start with repo scope."""
-    label = "ask_repo stream start" if stream else "ask_repo start"
+    """Log github_search / stream start with repo scope."""
+    label = "github_search stream start" if stream else "github_search start"
     logger.info(
         f"{label} scope={scope.scope} repo_count={len(scope.full_names)}",
         extra=repo_log_extra(scope, tool_name=tool_name, stream=stream, user=user),
@@ -124,7 +124,7 @@ def log_ask_github_done(
     stream: bool,
 ) -> None:
     """Log completion of README + code-search evidence gathering."""
-    prefix = "ask_repo stream github_done" if stream else "ask_repo github_done"
+    prefix = "github_search stream github_done" if stream else "github_search github_done"
     logger.info(
         f"{prefix} citation_count={citation_count}",
         extra={
@@ -146,7 +146,7 @@ def log_ask_done(
     latency_ms: dict[str, int],
 ) -> None:
     """Log successful ask completion with latency breakdown."""
-    prefix = "ask_repo stream done" if stream else "ask_repo done"
+    prefix = "github_search stream done" if stream else "github_search done"
     logger.info(
         f"{prefix} citation_count={citation_count} follow_up_count={follow_up_count} "
         f"latency_total_ms={latency_ms.get('total', 0)}",
@@ -165,9 +165,9 @@ def log_ask_exception(exc: BaseException, *, stream: bool) -> None:
     extra: dict[str, Any] = {"error_type": type(exc).__name__}
     if isinstance(exc, httpx.HTTPStatusError):
         extra["upstream_status"] = exc.response.status_code
-        msg = f"ask_repo{' stream' if stream else ''} upstream status={exc.response.status_code}"
+        msg = f"github_search{' stream' if stream else ''} upstream status={exc.response.status_code}"
     else:
-        msg = f"ask_repo{' stream' if stream else ''} failed"
+        msg = f"github_search{' stream' if stream else ''} failed"
     logger.exception(msg, extra=extra)
 
 

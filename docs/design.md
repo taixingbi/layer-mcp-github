@@ -17,7 +17,7 @@ Client
    McpStreamMiddleware (SSE tools/call)
         │
         ▼
-   tools.ask_repo  →  pipeline / streaming
+   tools.github_search  →  pipeline / streaming
         │
    ┌────┴────┐
    ▼         ▼
@@ -35,8 +35,8 @@ GitHub     LLM gateway
 | `version.py` | Reads `[project].version` from installed package (set in `pyproject.toml`) |
 | `mcp/http.py` | Stream detection + SSE generator |
 | `mcp/server.py` | FastMCP |
-| `mcp/tools.py` | `ask_repo`, `ask_repo_stream` |
-| `ask/pipeline.py` | Buffered `ask_repo_impl` |
+| `mcp/tools.py` | `github_search` |
+| `ask/pipeline.py` | Buffered `github_search` pipeline (`ask_repo_impl`) |
 | `ask/common.py` | Shared validation, logging, buffered LLM |
 | `ask/prompts.py` | `SYSTEM_PROMPT`, `FOLLOW_UP_PROMPT` |
 | `ask/sse.py` | SSE format/parse/remap |
@@ -61,7 +61,7 @@ GitHub     LLM gateway
 
 ## Observability
 
-Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.md](log-json-schema.md). Key lines: `ask_repo start`, `ask_repo done`, `ask_repo stream *`, `mcp tools/call sse start`, `http request done`. Set `LOG_LEVEL=DEBUG` for more detail.
+Structured **stderr JSON** logs (one object per line). Schema: [log-json-schema.md](log-json-schema.md). Key lines: `github_search start`, `github_search done`, `github_search stream *`, `mcp tools/call sse start`, `http request done`. Set `LOG_LEVEL=DEBUG` for more detail.
 
 | Route | Purpose |
 |-------|---------|

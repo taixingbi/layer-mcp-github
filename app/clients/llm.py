@@ -30,7 +30,7 @@ def llm_api_key() -> str:
 
 
 def llm_max_tokens() -> int:
-    """Default max_tokens for ask_repo chat completions (completion length cap)."""
+    """Default max_tokens for github_search chat completions (completion length cap)."""
     return int(os.environ.get("LLM_MAX_TOKENS", "384"))
 
 

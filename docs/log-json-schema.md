@@ -47,14 +47,14 @@ If the `LogRecord` has any of these attributes (via `logger.info(..., extra={...
 
 Defined allowlist in code (`_EXTRA_JSON_FIELDS` in [`app/observability/logging_config.py`](../app/observability/logging_config.py)):
 
-- `duration_ms` — mirrors `latency_total_ms` on `ask_repo done` / `ask_repo stream done` lines
+- `duration_ms` — mirrors `latency_total_ms` on `github_search done` / `github_search stream done` lines
 - `latency_total_ms`, `latency_github_readme_ms`, `latency_github_search_ms`, `latency_chat_ms`, `latency_follow_up_chat_ms`
 - `repo`, `repos`, `repo_count`, `scope` — allowlist resolution (`single` / `multi` / `all`)
-- `stream` — `true` for SSE or MCP `stream: true`; `false` for buffered `ask_repo`
-- `tool_name` — `ask_repo`, `ask_repo_stream`, etc.
+- `stream` — `true` for SSE/default behavior; `false` for buffered `github_search`
+- `tool_name` — `github_search`
 - `phase` — pipeline step (`github_done`, `sse_start`, …)
 - `citation_count`, `follow_up_count`
-- `ok` — `true` on success lines; `false` on `ask_repo fail` warnings
+- `ok` — `true` on success lines; `false` on `github_search fail` warnings
 - `reason`, `upstream_status`, `error_type`, `error_message`
 - `user_roles`, `user_groups`, `user_teams` — from optional `X-User-*` headers on HTTP `/v1/mcp`
 - `backend` — project root on `logging configured` startup line
@@ -66,13 +66,13 @@ To add new structured fields for dashboards or alerts, extend that tuple in `log
 **Ask start (HTTP buffered tools/call):**
 
 ```json
-{"ts": "2026-05-22T10:00:00.000000-04:00", "level": "INFO", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "taixing", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "ask_repo start scope=all repo_count=9 stream=false", "tool_name": "ask_repo", "stream": false, "scope": "all", "repo_count": 9, "repos": ["owner/repo1", "..."], "user_roles": "anyuser", "user_groups": "", "user_teams": ""}
+{"ts": "2026-05-22T10:00:00.000000-04:00", "level": "INFO", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "taixing", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "github_search start scope=all repo_count=9 stream=false", "tool_name": "github_search", "stream": false, "scope": "all", "repo_count": 9, "repos": ["owner/repo1", "..."], "user_roles": "anyuser", "user_groups": "", "user_teams": ""}
 ```
 
 **Ask finished:**
 
 ```json
-{"ts": "2026-05-22T10:00:02.500000-04:00", "level": "INFO", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "taixing", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "ask_repo done citation_count=12 follow_up_count=3 latency_total_ms=2500", "ok": true, "tool_name": "ask_repo", "stream": false, "citation_count": 12, "follow_up_count": 3, "duration_ms": 2500, "latency_total_ms": 2500, "latency_github_readme_ms": 400, "latency_github_search_ms": 600, "latency_chat_ms": 1200, "latency_follow_up_chat_ms": 300}
+{"ts": "2026-05-22T10:00:02.500000-04:00", "level": "INFO", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "taixing", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "github_search done citation_count=12 follow_up_count=3 latency_total_ms=2500", "ok": true, "tool_name": "github_search", "stream": false, "citation_count": 12, "follow_up_count": 3, "duration_ms": 2500, "latency_total_ms": 2500, "latency_github_readme_ms": 400, "latency_github_search_ms": 600, "latency_chat_ms": 1200, "latency_follow_up_chat_ms": 300}
 ```
 
 **HTTP request wrapper:**
@@ -84,7 +84,7 @@ To add new structured fields for dashboards or alerts, extend that tuple in `log
 **With exception:**
 
 ```json
-{"ts": "2026-05-22T10:00:01.000000-04:00", "level": "ERROR", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "-", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "ask_repo upstream github status=403", "upstream_status": 403, "error_type": "HTTPStatusError", "error": "Traceback (most recent call last):\n  ..."}
+{"ts": "2026-05-22T10:00:01.000000-04:00", "level": "ERROR", "request_id": "req-abc", "session_id": "ses-xyz", "trace_id": "-", "user_id": "-", "conversation_id": "conv_deadbeef", "method": "POST", "path": "/v1/mcp", "status": "-", "message": "github_search upstream github status=403", "upstream_status": 403, "error_type": "HTTPStatusError", "error": "Traceback (most recent call last):\n  ..."}
 ```
 
 ## Configuration

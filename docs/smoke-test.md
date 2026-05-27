@@ -50,7 +50,7 @@ curl -s -X POST \
   http://127.0.0.1:8000/v1/mcp | jq -r '.result.tools[].name' | sort
 ```
 
-**Pass:** `ask_repo`, `ask_repo_stream`.
+**Pass:** `github_search`.
 
 Use `/v1/mcp` not `/v1/mcp/`.
 
@@ -62,7 +62,7 @@ Use `/v1/mcp` not `/v1/mcp/`.
 curl -s --max-time 120 -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"introduce this huntAi project","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
+  -d '{"jsonrpc":"2.0","id":"smoke-1","method":"tools/call","params":{"name":"github_search","arguments":{"repo":"layer-orchestrator-v1","question":"introduce this huntAi project","stream":false,"conversation_id":"conv_smoke_1","request_id":"req-smoke-1","session_id":"ses-smoke-1","trace_id":"trc-smoke-1"}}}' \
   http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent | {status, answer: .answer.text, citations: .answer.citations}'
 ```
 
@@ -72,7 +72,7 @@ curl -s --max-time 120 -X POST \
 
 ## 4. MCP — real SSE stream (`Accept: text/event-stream` + `stream: true`)
 
-Requires `Accept: text/event-stream` and `"stream": true` on `ask_repo` (or `ask_repo_stream`). Events: `meta` (once), `delta` (answer text chunks), `done` (full payload).
+Requires `Accept: text/event-stream` and `github_search` (stream defaults to true). Events: `meta` (once), `delta` (answer text chunks), `done` (full payload).
 
 ```bash
 curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
@@ -86,11 +86,10 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
     "id":"smoke-1s",
     "method":"tools/call",
     "params":{
-      "name":"ask_repo",
+      "name":"github_search",
       "arguments":{
         "repo":"layer-orchestrator-v1",
         "question":"introduce this huntAi project",
-        "stream":true,
         "conversation_id":"conv_smoke_1s"
       }
     }
@@ -113,7 +112,7 @@ awk '/^event: done$/{p=1} p&&/^data: /{sub(/^data: /,""); print}' /tmp/mcp-strea
 curl -s -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -d '{"jsonrpc":"2.0","id":"smoke-corr","method":"tools/call","params":{"name":"ask_repo","arguments":{"repo":"layer-orchestrator-v1","question":"One sentence.","stream":false}}}' \
+  -d '{"jsonrpc":"2.0","id":"smoke-corr","method":"tools/call","params":{"name":"github_search","arguments":{"repo":"layer-orchestrator-v1","question":"One sentence.","stream":false}}}' \
   http://127.0.0.1:8000/v1/mcp | jq '.result.structuredContent.meta | {request_id, session_id, trace_id, conversation_id}'
 ```
 
@@ -157,10 +156,9 @@ curl -N -sS --max-time 120 -X POST http://127.0.0.1:8000/v1/mcp \
     "id":"smoke-1s",
     "method":"tools/call",
     "params":{
-      "name":"ask_repo",
+      "name":"github_search",
       "arguments":{
         "question":"introduce this huntAi project",
-        "stream":true,
         "conversation_id":"conv_smoke_1s"
       }
     }

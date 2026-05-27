@@ -19,18 +19,17 @@ Implementation: [`app/mcp/tools.py`](../app/mcp/tools.py), [`app/mcp/http.py`](.
 
 | Tool | Notes |
 |------|-------|
-| `ask_repo` | Main tool; `stream: true` + `Accept: text/event-stream` → SSE |
-| `ask_repo_stream` | Alias for `ask_repo(..., stream=true)` |
+| `github_search` | Main tool; default `stream: true` + `Accept: text/event-stream` → SSE. Set `stream: false` for buffered JSON |
 
 ---
 
-## `ask_repo` arguments
+## `github_search` arguments
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `question` | yes | — | User question |
 | `repo` | no | all allowlisted | Short name or `owner/name` |
-| `stream` | no | `false` | `true` → SSE on HTTP `/v1/mcp` when Accept allows |
+| `stream` | no | `true` | `false` → buffered JSON-RPC result; `true` (default) → SSE on HTTP `/v1/mcp` when Accept allows |
 | `request_id` | no | env / UUID | `X-Request-Id` to gateway |
 | `session_id` | no | env / UUID | `X-Session-Id` |
 | `trace_id` | no | env / `null` | `X-Trace-Id` when set |
@@ -84,7 +83,7 @@ Implementation: [`app/mcp/jsonrpc.py`](../app/mcp/jsonrpc.py), [`app/mcp/app.py`
 
 ## Real SSE on `POST /v1/mcp`
 
-When **both** `Accept: text/event-stream` and `tools/call` with `stream: true` (or `ask_repo_stream`):
+When **both** `Accept: text/event-stream` and `tools/call` with `github_search` (default stream=true, or explicit `stream: true`):
 
 | Event | Body | Notes |
 |-------|------|-------|
@@ -126,7 +125,7 @@ curl -N -sS --max-time 120 -X POST http://192.168.86.179:30191/v1/mcp \
     "id":"smoke-1s",
     "method":"tools/call",
     "params":{
-      "name":"ask_repo",
+      "name":"github_search",
       "arguments":{
         "question":"introduce this huntAi project",
         "stream":true,

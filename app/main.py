@@ -29,7 +29,7 @@ def _run_server() -> None:
     setup_logging()
 
     if "--http" in sys.argv:
-        llm = llm_gateway_base() or "(not set — ask_repo will fail)"
+        llm = llm_gateway_base() or "(not set — github_search will fail)"
         default_repos = allowed_short_names()
         base = f"http://127.0.0.1:{HTTP_PORT}"
         print(f"MCP {base}{MCP_HTTP_PATH}  (stream: Accept SSE + stream:true)", flush=True)

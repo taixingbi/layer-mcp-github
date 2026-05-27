@@ -50,7 +50,7 @@ def bind_ask_context(
     path: str = "-",
     status: str = "-",
 ):
-    """Bind request + HTTP contextvars for the duration of one ask_repo call."""
+    """Bind request + HTTP contextvars for the duration of one github_search call."""
     with bind_request_context(
         request_id,
         session_id,

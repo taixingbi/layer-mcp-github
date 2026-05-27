@@ -44,7 +44,7 @@ async def stream_ask_repo_events(
     on_status: Callable[[str, dict[str, Any]], Awaitable[None] | None] | None = None,
     http_method: str = "-",
     http_path: str = "-",
-    tool_name: str = "ask_repo",
+    tool_name: str = "github_search",
     jsonrpc_id: str | int | None = None,
 ) -> AsyncIterator[str]:
     """Yield SSE: ``meta`` (once), ``delta`` (answer text chunks), ``done`` (full payload)."""
@@ -233,7 +233,7 @@ async def ask_repo_mcp_stream(
     ctx: Context | None = None,
     http_method: str = "-",
     http_path: str = "stdio",
-    tool_name: str = "ask_repo",
+    tool_name: str = "github_search",
 ) -> dict[str, Any]:
     """Consume stream; MCP progress for phases; return final ``done`` payload only."""
     from .response import build_tool_error

@@ -31,19 +31,20 @@ def _correlation_kwargs(
 
 
 @mcp.tool()
-async def ask_repo(
+async def github_search(
     question: str,
     repo: str | None = None,
-    stream: bool = False,
+    stream: bool = True,
     request_id: str | None = None,
     session_id: str | None = None,
     trace_id: str | None = None,
     conversation_id: str | None = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    """Answer a question about allowlisted GitHub repos (retrieve + LLM synthesis).
+    """Search allowlisted GitHub repos and synthesize an answer.
 
-    Default (no repo): all repos in app/allowlist/repos.py. Set stream=true for token streaming via MCP progress/logs.
+    Default (no repo): all repos in app/allowlist/repos.py. Streaming is enabled by default;
+    set stream=false for buffered output.
 
     Returns standard tool payload: meta, answer (text + citations), follow_up_questions, latency_ms, usage, status.
     """
@@ -59,7 +60,7 @@ async def ask_repo(
             question,
             ctx=ctx,
             http_path="stdio",
-            tool_name="ask_repo",
+            tool_name="github_search",
             **corr,
         )
         return ensure_tool_success(result)
@@ -72,34 +73,8 @@ async def ask_repo(
             http_method="-",
             http_path="stdio",
             stream=False,
-            tool_name="ask_repo",
+            tool_name="github_search",
             **corr,
         )
-    )
-    return ensure_tool_success(result)
-
-
-@mcp.tool()
-async def ask_repo_stream(
-    question: str,
-    repo: str | None = None,
-    request_id: str | None = None,
-    session_id: str | None = None,
-    trace_id: str | None = None,
-    conversation_id: str | None = None,
-    ctx: Context | None = None,
-) -> dict[str, Any]:
-    """Alias for ask_repo(stream=true). Prefer ask_repo with stream in arguments."""
-    result = await ask_repo_mcp_stream(
-        repo,
-        question,
-        ctx=ctx,
-        tool_name="ask_repo_stream",
-        **_correlation_kwargs(
-            request_id=request_id,
-            session_id=session_id,
-            trace_id=trace_id,
-            conversation_id=conversation_id,
-        ),
     )
     return ensure_tool_success(result)

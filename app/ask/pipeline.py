@@ -142,9 +142,9 @@ def ask_repo_impl(
     http_method: str = "-",
     http_path: str = "-",
     stream: bool = False,
-    tool_name: str = "ask_repo",
+    tool_name: str = "github_search",
 ) -> dict[str, Any]:
-    """Buffered ask_repo: GitHub retrieval, gateway chat, follow-ups (sync, for MCP thread pool)."""
+    """Buffered github_search: GitHub retrieval, gateway chat, follow-ups (sync, for MCP thread pool)."""
     rid, sid, tid, conv = resolve_correlation(
         request_id=request_id,
         session_id=session_id,

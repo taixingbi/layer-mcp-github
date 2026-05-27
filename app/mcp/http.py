@@ -1,4 +1,4 @@
-"""POST /v1/mcp with real SSE when Accept: text/event-stream and tools/call stream=true."""
+"""POST /v1/mcp with real SSE when Accept: text/event-stream and github_search is streaming."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from app.observability.logging_config import logger
 
 from .jsonrpc import INVALID_PARAMS, request_id_from, sse_error_frame
 
-STREAM_TOOLS = frozenset({"ask_repo", "ask_repo_stream"})
+STREAM_TOOLS = frozenset({"github_search"})
 
 
 def _truthy_stream(value: Any) -> bool:
@@ -41,16 +41,16 @@ def accepts_event_stream(request: Request) -> bool:
 
 
 def is_streaming_tools_call(body: dict[str, Any]) -> bool:
-    """True for tools/call on ask_repo(stream) or ask_repo_stream."""
+    """True for tools/call on github_search with default stream=true semantics."""
     if body.get("method") != "tools/call":
         return False
     params = body.get("params") or {}
     name = params.get("name")
     if name not in STREAM_TOOLS:
         return False
-    if name == "ask_repo_stream":
-        return True
     args = params.get("arguments") or {}
+    if "stream" not in args:
+        return True
     return _truthy_stream(args.get("stream"))
 
 
@@ -85,7 +85,7 @@ async def mcp_tools_call_sse(
     request: Request,
     body: dict[str, Any],
 ) -> AsyncIterator[str]:
-    """Run ask_repo streaming and remap SSE events for MCP HTTP clients."""
+    """Run github_search streaming and remap SSE events for MCP HTTP clients."""
     rpc_id = request_id_from(body)
     try:
         repo, question, args = parse_tools_call_arguments(body)
@@ -95,7 +95,7 @@ async def mcp_tools_call_sse(
 
     extra = tools_call_stream_kwargs(request, args)
     params = body.get("params") or {}
-    tool_name = str(params.get("name") or "ask_repo")
+    tool_name = str(params.get("name") or "github_search")
 
     logger.info(
         f"mcp tools/call sse start tool={tool_name}",
