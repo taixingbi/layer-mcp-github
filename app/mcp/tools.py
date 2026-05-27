@@ -8,8 +8,8 @@ from typing import Any
 import anyio
 from mcp.server.fastmcp import Context
 
-from app.ask.pipeline import ask_repo_impl
-from app.ask.streaming import ask_repo_mcp_stream
+from app.ask.pipeline import github_search_impl
+from app.ask.streaming import github_search_mcp_stream
 
 from .server import mcp
 from .tools_helpers import ensure_tool_success
@@ -55,7 +55,7 @@ async def github_search(
         conversation_id=conversation_id,
     )
     if stream:
-        result = await ask_repo_mcp_stream(
+        result = await github_search_mcp_stream(
             repo,
             question,
             ctx=ctx,
@@ -67,7 +67,7 @@ async def github_search(
 
     result = await anyio.to_thread.run_sync(
         partial(
-            ask_repo_impl,
+            github_search_impl,
             repo,
             question,
             http_method="-",

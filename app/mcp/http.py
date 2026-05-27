@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from app.config import MCP_HTTP_PATH
 from app.ask.sse import remap_frame_for_mcp_client
-from app.ask.streaming import stream_ask_repo_events
+from app.ask.streaming import stream_github_search_events
 from app.observability.correlation import (
     parse_http_correlation,
     parse_http_user,
@@ -102,7 +102,7 @@ async def mcp_tools_call_sse(
         extra={"tool_name": tool_name, "stream": True, "phase": "sse_start"},
     )
 
-    async for frame in stream_ask_repo_events(
+    async for frame in stream_github_search_events(
         repo,
         question,
         http_method=request.method,

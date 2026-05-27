@@ -36,7 +36,7 @@ GitHub     LLM gateway
 | `mcp/http.py` | Stream detection + SSE generator |
 | `mcp/server.py` | FastMCP |
 | `mcp/tools.py` | `github_search` |
-| `ask/pipeline.py` | Buffered `github_search` pipeline (`ask_repo_impl`) |
+| `ask/pipeline.py` | Buffered `github_search` pipeline (`github_search_impl`) |
 | `ask/common.py` | Shared validation, logging, buffered LLM |
 | `ask/prompts.py` | `SYSTEM_PROMPT`, `FOLLOW_UP_PROMPT` |
 | `ask/sse.py` | SSE format/parse/remap |

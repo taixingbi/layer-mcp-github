@@ -26,12 +26,12 @@ from .common import (
     resolve_ask_scope_or_error,
     tool_error_response,
 )
-from .pipeline import finish_ask_repo_result, gather_github_evidence
+from .pipeline import finish_github_search_result, gather_github_evidence
 from .response import stream_delta_event, stream_meta_event
 from .sse import parse_sse_frame, sse_format
 
 
-async def stream_ask_repo_events(
+async def stream_github_search_events(
     repo: str | None,
     question: str,
     *,
@@ -191,7 +191,7 @@ async def stream_ask_repo_events(
             yield sse_error_frame(jsonrpc_id, INTERNAL_ERROR, msg, data=err_body)
             return
 
-        result = finish_ask_repo_result(
+        result = finish_github_search_result(
             full_names=scope.full_names,
             scope=scope.scope,
             multi=scope.multi,
@@ -222,7 +222,7 @@ async def stream_ask_repo_events(
         yield sse_format("done", result)
 
 
-async def ask_repo_mcp_stream(
+async def github_search_mcp_stream(
     repo: str | None,
     question: str,
     *,
@@ -256,7 +256,7 @@ async def ask_repo_mcp_stream(
             step += 1
             await ctx.report_progress(step, total_steps, phase)
 
-    async for frame in stream_ask_repo_events(
+    async for frame in stream_github_search_events(
         repo,
         question,
         request_id=request_id,

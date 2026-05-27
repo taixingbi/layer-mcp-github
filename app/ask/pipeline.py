@@ -88,7 +88,7 @@ def gather_github_evidence(
     return citations, user_body, latency, readmes, code_hits
 
 
-def finish_ask_repo_result(
+def finish_github_search_result(
     *,
     full_names: list[str],
     scope: str,
@@ -130,7 +130,7 @@ def finish_ask_repo_result(
     )
 
 
-def ask_repo_impl(
+def github_search_impl(
     repo: str | None,
     question: str,
     *,
@@ -215,7 +215,7 @@ def ask_repo_impl(
             )
             return _fail(httpx_error_message(e), **extra)
 
-        result = finish_ask_repo_result(
+        result = finish_github_search_result(
             full_names=scope.full_names,
             scope=scope.scope,
             multi=scope.multi,

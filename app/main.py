@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import app.mcp.tools  # noqa: F401 — register tools
 from app.allowlist import ALLOWED_REPOS, allowed_short_names, resolve_repo, resolve_repos
-from app.ask.pipeline import ask_repo_impl
+from app.ask.pipeline import github_search_impl
 from app.clients.llm import llm_gateway_base
 from app.config import HTTP_PORT, MCP_HTTP_PATH
 from app.mcp.server import mcp
 
 __all__ = [
     "ALLOWED_REPOS",
-    "ask_repo_impl",
+    "github_search_impl",
     "mcp",
     "resolve_repo",
     "resolve_repos",
